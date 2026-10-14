@@ -1,0 +1,635 @@
+<html>
+
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Lecture 3</title>
+
+<script type="text/javascript" async
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-MML-AM_CHTML">
+</script>
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}});
+</script>
+<script type="text/javascript" src="library.js"></script>
+<link href="style.css" rel="stylesheet" type="text/css">
+</head>
+
+<body>
+
+
+<div class="header">
+<h1 style="color: rgb(165, 42, 42);">Introduction to Program Synthesis</h1>
+&copy; Armando Solar-Lezama. 2018, 2025. All rights reserved.
+&copy; Theo X. Olausson. 2025. All rights reserved.</div>
+
+<div id="navigator" class="sidenav">
+
+</div>
+<script type="text/javascript">
+loadNavBar();
+</script>
+
+<div class="content">
+
+
+<h1>Lecture 3: Bottom Up Explicit Search <a href="https://code.playskript.com/view.html?id=4680da13d9e490ec98b578751aa30c38a3155ec316db86b94f">(Slides)</a></h1>
+
+<h2>Simple bottom up search</h2>
+
+The simplest bottom up synthesis algorithm works by explicitly constructing all possible programs from a
+grammar starting with the terminals in the language. As one can imagine, this can be very inefficient,
+since the space of all expressions grows very large even with very small programs. The key idea behind this
+algorithm is to prune the set of primitives at every step by eliminating those that are deemed to be
+"<i>observationally equivalent</i>"; i.e. those which produce the same outputs on those inputs that were
+given as a specification. The key ideas of this algorithm were first presented in a paper by Albarghouthi, Gulwani and Kinkaid
+<cite>AlbarghouthiGK13</cite>, although a very similar algorithm was discovered independently and
+presented only a few months later by Udupa et al.<cite>Udupa:2013</cite>.
+
+<p/>
+
+The high-level algorithm is shown below.
+<codeblock>
+Synthesize(inputs, outputs):
+  plist := set of all terminals
+  while(true):
+    plist := grow(plist);
+    plist := elimEquvalents(plist, inputs);
+    forall( p in plist)
+      if(isCorrect(p, inputs, outputs)): return p;
+
+</codeblock>
+The key steps in the algorithm are the <code>grow</code> operation, which uses the non-terminals in the grammar to
+construct new terms from all the terms in <code>plist</code>, and the <code>elimEquivalents</code> step, which
+eliminates all terms that are deemed to be redundant by virtue of being equivalent to other terms in the list.
+A key idea behind this algorithm is that the check of equivalence is not an real equivalence check, which would
+be expensive. Instead, the expressions are tested on the target inputs, and any two expression that produce
+the same outputs on these inputs are deemed equivalent, regardless of whether they are truly equivalent or not.
+This is what is referred to as "observational equivalence", the idea being that since we only care about the
+behavior of the synthesized program on the given inputs, any behavior difference on other inputs is irrelevant.
+
+<p/>
+
+<slide>Lecture3:Slide4</slide>
+As an example, consider again the language <a href="Lecture2.htm#example">introduced earlier</a>. Initially, the <code>plist</code> will contain
+all the terminals in the grammar: <code>in, [0], 0</code>. After the first call to <code>grow</code>, the
+set of expressions grows quite dramatically, as it now includes all expressions that can be creating by composing
+the original terminals using the different production rules in the grammar. As we can see in the figure, however,
+many of these expressions are clearly equivalent. For example, <code>sort([0])</code> is equivalent to <code>[0]</code>,
+and <code>firstZero([0])</code> is equivalent to <code>0</code>. More interestingly, <code>in[0,0]</code> and
+<code>[0][0,0]</code> may not be equivalent in general, but if I only have two inputs <code>[0,7,3,2,5,6,3]</code>
+and <code>[0,2,13,5,9,1,0]</code>,
+then <code>in[0,0]</code> and <code>[0][0,0]</code> are observationally equivalent, since they are equivalent
+on all available inputs; on any program that uses <code>in[0,0]</code>, we can replace it with
+<code>[0][0,0]</code>, and it will produce the same output on the given inputs.
+
+<p/>
+
+For each equivalence class of observationally equivalent
+programs, <code>elimEquivalents</code> eliminates all but one of them. Each equivalent program that is eliminated
+actually leads to exponential savings, since it spares us from having to construct the exponentially many programs
+that could be constructed from that sub-program.
+
+<p/>
+
+This algorithm as described is extremely simple, but it is already quite powerful. First, it naturally explores
+small programs before large programs, so it automatically finds the smallest program satisfying the specification.
+Additionally, it is easy to introduce heuristics into <code>grow</code> and <code>elimEquivalents</code> to direct
+the search for programs so that programs that are deemed more desirable are discovered first, or to speed up the search
+based on prior knowledge of which programs are more likely to be correct. A second benefit of this algorithm is that
+it works with black-box language building blocks. For example, for the language above, there is no need to have source
+code for <code>sort</code> or <code>firstZero</code>; the algorithm just needs to be able to execute them.
+The algorithm also does a good job of coping with symmetries, and is able to exploit properties of the building
+blocks even without access to their source code; for example, even without being told that <code>sort</code>
+is idempotent, the algorithm would immediately discard <code>sort(sort(in))</code> after deeming it equivalent
+to <code>sort(in)</code>. However, the algorithm is not a magic bullet, there are some important conditions that need
+to be met for the algorithm to work correctly, conditions that our language in the running example doesn't actually meet!
+
+<h2>Formal Requirements</h2>
+
+The bottom-up search algorithm comes with some important formal requirements. The most important requirement is that the semantics of a program fragment should not depend on the context. The algorithm relies on being able to prune an expression $e_2$ on the basis of there being another expression $e_1$ with the same semantics already in the search space. But this only works if the following condition is satisfied:
+
+<div class="quote">
+<b>Context independent equivalence:</b> Given two expressions $e_1$ and $e_2$ evaluated on inputs $\sigma$, bottom up search requires that the following condition be true:
+$\forall \sigma.  ObsEquiv(e_1, e_2,\sigma) \Rightarrow \forall \mathcal{C}.
+    ObsEquiv(\mathcal{C}[e_1], \mathcal{C}[e_2],\sigma)$<br />
+Where $ObsEquiv(e_1, e_2, inputs)$ is the observational equivalence of two expressions under
+a given set of inputs.
+</div>
+In the notation $\mathcal{C}[e]$, $\mathcal{C}$ is a <i>context</i>, i.e. an expression with a hole,
+and $\mathcal{C}[e]$ is the expression you get by filling the hole in $\mathcal{C}$ with the expression
+$e$. In other words, if two expressions $e_1$ and $e_2$ are equivalent for a given set of inputs,
+then any expression that includes $e_1$ as a sub-expression will be equivalent to the same expression with $e_2$ replacing $e_1$.
+
+<p/>
+As an example, the property clearly holds for arithmetic expressions. For example, the expression
+    $(x+2)/5$ equals $(x-2)$ when $x=3$. Therefore, in any expression that includes $(x+2)/5$ as a
+    sub-expression we can replace $(x+2)/5$ by $(x-2)$ and its value will remain unchanged for $x=3$.
+    This follows from the fact that arithmetic expressions are evaluated in a bottom up fashion irrespective
+    of their context.
+    On the other hand, the property will generally not hold for imperative programs. For example, even though the expressions above are equal when $x=3$, the programs below will not be equal even when fed the value $x=3$.
+<codeblock>
+  def f1(x):
+      x = x + 5
+      return (x+2)/5
+
+  def f2(x):
+      x = x + 5
+      return (x-2)
+</codeblock>
+With this in mind, the language from the running example should be raising alarm bells. This is because the language semantics are not context independent.
+In particular, the value produced by the recursive call depends on the context of the call (since the call will return the result of evaluating the entire
+program on that input). For example, consider the expressions <code>rec(in[1, len(in)])</code> and <code>[]</code>. For the input
+list <code>[1,2,3]</code>, the two expressions evaluate to the empty list. But they will not be equivalent in all contexts.
+In particular, the expressions <code>rec(in[1, len(in)])+[0]</code> and <code>[]+[0]</code> will produce very different outcomes.
+Does this mean that we will not be able to use bottom-up search with observational equivalence on this language?
+<p/>
+Not quite, but we will have to be more careful in defining the notion of observational equivalence that will be used to prune the search space; doing
+this correctly can be quite tricky.
+For example, one seemingly quick fix is to simply enforce that expressions with <code>rec</code> will never be observationally equivalent to anything else.
+This will prevent the context sensitive calls from being merged without affecting the ability to merge context insensitive calls. This will
+handle the case where $e_1$ and $e_2$ have <code>rec</code> calls, but will <b>not</b> guarantee context independent equivalence. Why not?
+Because the context may also have calls to <code>rec</code>. So for example, consider the expressions <code>in[0,0]</code> and
+<code>[0]</code>. For the input <code>[0,1,2,3]</code> the two expressions are the same, but under that input, the expressions
+<code>rec(in[1, len(in)])+in[0,0]</code> and <code>rec(in[1, len(in)])+[0]</code> are not equivalent.
+<p/>
+A different way to salvage bottom up search for this language, or for any language that involves recursive calls, is to
+require <i>trace completeness</i>. This means that you require that the user provided examples include examples for any recursive call.
+For example, if I want to provide examples for the <code>reverse</code> function, I would provide the example <code>[1,2,3]=>[3,2,1]</code>
+ but trace completeness would also require me to provide the example <code>[2,3]=>[3,2]</code>. Now, when constructing examples bottom-up,
+ any expression that includes <code>rec</code> can be checked to see if there is an example with those arguments. If there is, then
+ we know from the example what the result of the <code>rec</code> call should be, so the call does not actually need to be evaluated. And if the arguments
+ are not in the list of examples, the expression can be ruled out.
+ <p/>
+ Trace completeness may sound like a cop-out, and in some ways it is. For programming by example problems, requiring trace completeness may be
+ asking too much from the user. But there are many applications of program synthesis, for example for reverse engineering, where it is relatively
+ cheap to request additional examples, so for those applications, trace completeness may be an adequate solution.
+
+
+
+
+
+
+<p/>
+
+Even when context indepedent equivalence is satisfied, there is another important limitation
+    of the algorithm: scalability.
+Even with very aggressive prunning it is hard to scale the algorithm beyond a handful of terms. Moreover,
+while the algorithm does a good job at discovering how to connect discrete components, it does very poorly when there
+is a need to discover constants in a program, whether integers or reals.
+
+
+
+
+<h2>Bottom-up search with probabilities</h2>
+
+Recall from the last lecture that we can frame program synthesis as a posterior inference problem,
+in which we seek the program $p*$ that maximizes the posterior probability $P(p \mid e)$,
+where $e$ is some evidence (specification) provided by the user.
+In particular, suppose that $e$ is a set of input-output examples and we take the likelihood function
+to be $p(e \mid p) = 1$ if $p$ produces the correct output for all examples $e$,
+and $0$ otherwise.
+As mentioned in the previous lecture, this allows us to subsume the PBE problem,
+since any program that does not match the examples exactly will have zero posterior probability.
+However, finding the maximum-a-posteriori (MAP) program $p*$ is rarely tractable
+with such a sharp likelihood function,
+which sparked a wave of research in the late 2010s on using deep learning to fit
+approximate posteriors $p_\theta(p \mid e)$.
+However, it turns out that bottom-up search can also be used to find the MAP program
+in a few interesting cases of the prior $P(p)$, two of which we will discuss now.
+
+
+
+<h3>Length minimization</h3>
+Without making any assumptions about the problem,
+one common choice of prior in machine learning (and statistics) is to follow the
+minimum description length (MDL) principle.
+This principle essentially states that the prior probability of a hypothesis should be inversely proportional to its size.
+In our context, a priori we should prefer smaller programs over larger ones, since they are less likely to be overfitting the examples.
+
+As it turns out, the bottom-up search algorithm described earlier
+is actually a search for the MAP program under the MDL prior!
+That is, the program which bottom-up yields is provably the one that maximizes the posterior probability $P(p \mid e)$,
+if the likelihood is defined as above and the prior is inversely proportional to the depth of the program.
+The only requirement is that when two observationally equivalent programs are found,
+the algorithm must always keep the shortest one.
+
+It is important to note, however, that some of the improvements to bottom-up search
+that will be described later in the lecture mean the resulting algorithm no longer guarantees
+length minimization. For example, the <a href="#stun">STUN</a>
+approach needs to trade off the size of the solution in a given branch with 
+the strength of the predicate guarding that branch, and that tradeoff may 
+lead to programs that are not minimal. 
+
+
+<h3>Search with probabilistic grammars</h3>
+<slide>
+Lecture21:Slide17;
+Lecture21:Slide18;
+Lecture21:Slide19;
+Lecture21:Slide20
+</slide>
+The approaches for length minimization we have described so 
+far work with relatively few changes for some 
+richer representations of the distribution.
+For example, one kind of representation involves probabilistic
+grammars. A simple form of a probabilistic grammar is one 
+where every production has a probability, and the probabilities
+of all the productions for a given non-terminal add up to one.
+Under this formalism, the probability of an expression 
+generated by the grammar is the product of the probabilities
+of all the production rules used to create the expression. 
+<p/>
+Generating an expression that maximizes the probability
+under this scheme is very similar to generating an 
+expression that minimizes length. From 
+the perspective of bottom-up search, distributions
+of this kind have the advantage that they are compositional and context
+insensitive. This means that for every equivalence class of 
+behaviorally equivalent expressions we only need keep the one
+with the maximum probability.
+How do we know that by keeping only the expression with maximum
+probability we are not missing out on an expression that may
+prove useful later?  
+<p/>
+As a proof we know that for any expression $exp'$ we throw away, there is 
+an equivalent expression $exp$ that we kept that has the same input/output behavior as 
+$exp'$ and the same or higher probability. So we know that the $exp'$ cannot be 
+necessary to construct the highest probability expression, because any expression 
+$\mathcal{C}[exp']$ that uses $exp'$ as a sub-expression can be replaced by
+$\mathcal{C}[exp]$ to yield the same input/output behavior with the same or higher probability.
+
+
+<h2>Context sensitive probabilistic grammars</h2>
+<slide>
+Lecture21:Slide21;
+Lecture21:Slide22;
+Lecture21:Slide24;
+Lecture21:Slide25;
+Lecture21:Slide26;
+Lecture21:Slide27
+</slide>
+A richer kind of probabilistic grammar is one where the probabilities depend on the 
+context as illustrated in the figure. In this setting, the probability of a given production
+depends on where the production is used. This kind of probabilistic grammar
+poses a problem for bottom-up search, because given two equivalent ASTs, it may no longer
+be possible to determine that one has strictly higher probability than the other. 
+For example, consider the case illustrated in the figure. The probability of the expressions
+$x*2$ and $x+x$ depends on the context. In some contexts, the first one will have 
+a higher probability and in other contexts, the second one will, so if the 
+bottom-up algorithm wants to be able to produce the highest probability expression it needs
+to keep them both.
+<p/>
+Now, one of the advantages of eliminating expressions based on observational equivalence is that
+eliminating a single expression early on can have exponential benefits, since it also eliminates
+the exponentially large number of expressions that can be constructed from that expression. 
+So an important question is: Now that we are forced to keep multiple equivalent expressions, 
+will that make the algorithm exponentially more expensive? The answer is surprisingly NO!
+<p/>
+To understand why, consider again the example with the two expressions, $x*2$ and $x+x$. 
+For every expression that is constructed with $x*2$, there will now be an equivalent expression
+that uses $x+x$ instead. However, we will not actually be keeping all these equivalent
+expressions. An expression only needs to be kept if there is some context in which it is better than
+all other equivalent expressions. This means that for every equivalence class, we need to keep 
+at most $N$ expressions, where $N$ is the number of distinct contexts in the grammar. This
+is worse than the original algorithm which only had to keep one representative from every
+equivalence class, but only by a constant factor.
+
+
+
+
+
+<h2 id="stun">Synthesis through Unification (STUN)</h2>
+
+One way to address the scalability challenge is to modularize the search.
+One way to do this is that rather than trying to synthesize a program that works for all inputs
+in one shot, one can search for multiple programs that work for different situations and then find
+a way of combining them together into a program that works for all inputs.
+This idea was first formalized by Alur, Cerny and Radhakrishna <cite>Alur2015</cite> in an algorithm
+called <i>Synthesis through Unification</i>(STUN).
+
+To illustrate the idea, suppose you are given the following input output pairs:
+<codeblock>
+  input   -> output
+  (4, 5)  -> 4
+  (12,14) -> 12
+  (13, 10)-> 10
+  (5, 1)  -> 1
+</codeblock>
+And suppose you are given the following grammar:
+<div class="quote">
+$
+\begin{array}{rcll}
+intExpr &:= & fst & \mbox{first element of the input pair} \\
+~       & ~   & snd & \mbox{second element of the input pair} \\
+~       & ~   & 0 & \mbox{constant zero} \\
+~       & ~   & intExpr ~+~ 1 & \mbox{adds one to a number}  \\
+~       & ~   & if(boolExpr)~ intExpr~ else~ intExpr & \mbox{conditional expression}  \\
+boolExpr & :=  & intExpr ~>~ intExpr & \mbox{integer comparison} \\
+~       & ~   & boolExpr ~\&~ boolExpr & \mbox{conjunction}
+\end{array}
+$
+</div>
+
+The simple bottom-up search would require enumerating a fairly large set of programs, before hitting on the correct program,
+but we can also observe that the program $fst$ actually works for half of the given inputs, and the program <code>snd</code> works for all
+the others. Moreover, we can see that all the inputs on which <code>fst</code> produces the correct answer have the property that
+<code>fst < snd</code>, so from that we can construct the program <code>if(fst < snd) fst else snd</code>. The STUN approach makes this intuition systematic,
+by providing a strategy for synthesizing programs that work for subsets of the inputs and then discovering how to combine
+them into a complete program that works for all inputs. The general strategy works even for cases where we cannot
+simply introduce arbitrary branches, but there is also a more specialized version of the approach that works particularly well
+in cases where you can introduce branches <cite>Alur2017</cite>.
+
+<p/>
+<slide>Lecture3:Slide10</slide>
+The figure on the right illustrates a simplified version of the full algorithm. The procedure takes as input a set of
+inputs on which we wish the program to work correctly. As a first step, we do a first best-effort synthesis attempt and produce
+a program that works correctly on some inputs and incorrectly on others (if we happen to get a program that works on all inputs, we
+are done and we can just return that program). If the produced program fails on some input, we have two choices, we can either
+try to improve on the current program by demanding that it continues to work correctly on the current set of good inputs, but
+also on some of the other inputs on which it currently fails, or we can recursively call the <code>STUN</code> procedure on those inputs on which
+the current program <code>Prog</code> does not work. This will produce a new program <code>Prog'</code>, which works
+on all those inputs. Then the two programs <code>Prog</code> and <code>Prog'</code> need to be unified into a single
+program that works for all inputs.
+
+<p/>
+
+The full algorithm also needs to deal with the scenario where either the recursive call to STUN or the generation
+of a better program fail to find a program. In some cases, unification may require the programs to satisfy some
+additional conditions in order to succeed, so the algorithm needs to track those as well. Both of these are low-level
+details not captured by the figure. In the paper, the crucial decision of whether to try to continue to refine the current solution,
+or to recursively call the STUN procedure is handled by a simple heuristic: pick a random input, if that input fails,
+use that input to search for a better solution, if it succeeds, then perform the recursive call.
+This is a crude heuristic based on the intuition
+that the recursive call only happens when the current solution already works for a high-enough fraction of the current inputs.
+
+
+<p/>
+This is the general framework, but any specific instance of the algorithm needs to address the question of
+how to actually perform the unification of the two programs that work on different sets
+of inputs.
+
+<h2 id="stun_w_branches">Example: Arithmetic with top-level branches</h2>
+For this example, consider the following problem. We have a range of values,
+represented by its two extremes $(a,b)$, and we want to discover the lower
+bound of the new range when we multiply this range by another value $c$.
+Below are a few examples which will become the input to our algorithm.
+<slide>Lecture3:Slide11;
+Lecture3:Slide12;
+Lecture3:Slide13;
+Lecture3:Slide14;
+Lecture3:Slide15;
+Lecture3:Slide16;
+Lecture3:Slide17
+</slide>
+<codeblock>
+(5,10) * 3 => 15
+(8, 11)* -1 => -11
+(3,6)*4 => 12
+(-3, 8) *4 => -12
+</codeblock>
+The goal is to synthesize a small program that computes this given the following grammar.
+<div class="quote">
+$
+\begin{array}{rcl}
+expr &=& expr + expr \\
+     ~&~&   |~ expr * expr \\
+     ~&~&   |~ a ~|~ b ~|~ c ~ |~ - expr \\
+     ~&~&    if(bexp) ~ expr ~ else ~ expr \\
+bexp &=& expr > expr ~|~ expr > 0 \\
+\end{array}
+$
+</div>
+In the animation above, it is possible to see how after reaching only depth 2
+of an explicit search, we can already find an expression that works for a subset of the
+inputs. In fact, we can find expressions that together work for all the inputs.
+So now, the challenge is to unify them into a single expression that works for all inputs.
+In this case, we do the unification by discovering a branch that separates the inputs that
+work correctly for one branch from the inputs that work correctly for another.
+
+In this case, we can easily find that the expression <code>c > 0</code> precisely separates
+the two cases, so we can unify the two solutions into a general program
+<code>if(c > 0) a * c else b * c</code>.
+
+
+<h2>What if the language does not have top level branches?</h2>
+
+Consider the following alternative variant of the language above.
+<div class="quote">
+$
+\begin{array}{rcl}
+var &=& a ~|~ b ~|~ c\\
+expr &=& expr + expr \\
+     ~&~&   |~ expr * expr \\
+     ~&~&   |~ var ~ |~ - expr \\
+     ~&~&    if(bexp) ~ var ~ else ~ var \\
+bexp &=& expr > expr ~|~ expr > 0 \\
+\end{array}
+$
+</div>
+The language is very similar, but now we are left without the option of performing unification
+by introducing top-level branches.
+This means we need a different mechanism for performing unification, that is, for joining
+the two programs that work for different subsets of the input into a new program that
+works for all inputs. In order to do this, we will use something that in
+the literature is known as <b>antiunification</b> (even though the STUN paper <cite>Alur2015</cite>
+does not use that terminology).
+
+
+<h3 id="unification">Unification and Antiunification</h3>
+In the literature, the term unification generically means finding a common structure
+for two different expressions. More precisely, however, the literature distinguishes
+between <i>Unification</i>, where you find the common structure by replacing variables
+with expressions, and <i>Antiunification</i>, where you find the common structure
+by replacing expressions with variables.
+<p/>
+So for example, if I have two expressions $x + 5$ and $7 + y$, unification finds
+the common structure as $Unify(x+5, 7+y) = [7 + 5, (x->7, y->5)]$. That is,
+it tells us that the two expressions can be turned into the same expression
+by replacing $x$ with 7 and $y$ with 5.
+By contrast, if you have two expressions $7*3 + 2$ and $5*3+2$, antiunification
+identifies the common structure by introducing variables as $Antiunify(7*3+2, 5*3+2) = x*3+2$.
+<p/>
+The STUN paper does not actually use this terminology, but it is actually fairly
+standard, particularly in the inductive logic programming literature. So just
+keep in mind when reading the STUN paper that it uses Unification in the more generic
+sense that can potentially mean antiunification depending on the context.
+
+<slide>Lecture3:Slide20;
+Lecture3:Slide21;
+Lecture3:Slide22
+</slide>
+<h3>STUN without top-level branches</h3>
+
+Without the ability to introduce branches, we need an alternative way of combining
+together two expressions. In the example above, once we discover that there are two
+expressions <code>a*c</code> and <code>b*c</code> that together cover all the inputs,
+we can use antiunification to produce a common expression $v$<code>*c</code> where
+$v$ stands for a fragment of code, so now we need to discover what this
+missing code fragment is by recursively solving a (hopefully smaller) synthesis problem.
+In this case, we will discover that $v$<code>=if(c>0) a else b</code>.
+
+<p/>
+
+One thing to note is that when the expression $b*c$ was discovered, the synthesizer
+could have just as easily discovered the expression $-b$. This would have been a problem,
+because whereas antiunification of $b*c$ and $a*c$ worked exactly as expected,
+the expression $-b$ cannot be antiunified with $a*c$ except by making the whole
+expression a variable. The way STUN deals with this is that when a recursive call to
+STUN is performed, the algorithm can also pass additional constraints that the
+expression discovered by the recursive call must satisfy. Therefore, when recursively
+calling STUN with the example <code>(8, 11)* -1 => -11</code>, we can impose the
+additional constraint that the discovered expression must be antiunified with
+$a*c$. This would force the recursive call to STUN to produce $b*c$ instead of $-b$.
+
+<p/>
+
+The original STUN paper<cite>Alur2015</cite> describes other examples of the Unification
+operation $\oplus$. In particular, it describes an approach for bit-vectors that
+is also based on antiunification, but we will not describe it here.
+
+
+
+<h2 id="hierarchical">Hierarchical Search</h2>
+The approaches described earlier provide a way of modularizing the search by first discovering
+components that work on some fragments of the input space and then discovering how to weave
+them together to cover the entire space.
+This input-based modularization is only one of many different approaches of breaking up the
+search into independent search spaces.
+An alternative approach to improve the scalability of bottom-up search is to search the space hierarchically.
+This can be done in cases where the program can be split into different levels of abstraction, and where
+one can perform the search at each level independently.
+<p/>
+
+One example of this is the recent work by Wang, Cheung and Bodik
+<cite>Wang:2017</cite>. In this case, their goal is to synthesize complex
+SQL queries from examples. The key insight in their paper is that the
+problem can be decomposed in a hierarchical way. To understand how this can work,
+consider the following query language, which is a much simplified version of the language
+their system actually supports.
+<div class="quote">
+$
+\begin{array}{rcl}
+Rel &=& T \\
+     &|& \mbox{Select } Fields \mbox{ from } Rel \mbox{ where } Pred\\
+     &|& Rel , Rel \\
+Pred & = & exp = exp \\
+     & | & exp > exp \\
+     & | & Pred ~\&~ Pred \\
+Fields & = & table.name \mbox{ as } name \\
+		& | & table.name \mbox{ as } name, Fields\\
+\end{array}
+$
+</div>
+In the language above, a relation is either the name of a table $T$, a query on a
+relation, or a cross product on two different relations.
+Now, suppose you are given some tables, for example:
+
+<codeblock>
+Employee                    Depts
+---------                   -------------
+Name, Dept                  Dept, Building
+---------                   -------------
+Todd, Sales                 Sales, A1
+Joe, Engineering            Engineering, A2
+Alice, Engineering          Operations, A1
+Sally, Operations
+</codeblock>
+And suppose you are told the expected output of a query is this:
+<codeblock>
+Output
+---
+XX
+---
+Todd
+Sally
+</codeblock>
+The interesting thing to notice is that there are two aspects of the query
+that need to be discovered, and that are mostly independent of each other.
+On the one hand, there is the structure of the query, which is going
+to determine the "shape" of the output; the fact that there is
+a single column containing records that originally came from the Employee
+table. And on the other, there are the selection predicates. These include
+both the fact that we are selecting records where <code>Building=A1</code>,
+or the fact that we are joining on matching the <code>Dept</code> code.
+
+<p/>
+
+The key idea in their hierarchical search approach is to perform the search in two levels.
+First, use a simple bottom-up search to discover the structure of the query,
+in a language that replaces all predicates with holes as shown below.
+For each query in that language that produces output in the right shape,
+we can now search to see if there is a set of predicates that can be
+inserted into the holes that will cause the query to produce the right
+set of records.
+<div class="quote">
+$
+\begin{array}{rcl}
+Rel &=& T \\
+     &|& \mbox{Select } Fields \mbox{ from } Rel \mbox{ where } \Box\\
+     &|& Rel , Rel \\
+Fields & = & table.name \mbox{ as } name \\
+		& | & table.name \mbox{ as } name, Fields\\
+\end{array}
+$
+</div>
+An important ingredient in making this work is that we need to be able
+to evaluate the queries with holes and tell whether they can potentially
+produce an output with the right shape. The key idea is to define a semantics
+for queries with holes that is guaranteed to produce a superset of the
+records that any instantiation of the holes may produce. This is easy
+to do in the language above by simply treating every hole as $True$,
+although in the paper it gets a little more tricky because they also support
+aggregates. In general, though, if the queries with holes are guaranteed
+to produce a superset of the results, then we can search the space of
+queries with holes and safely rule out any query that does not produce
+a superset of our desired results.
+
+In the case of the example above, we may find that both the queries
+below produce results of the right shape.
+<codeblock>
+Select name as XX from Employee where _
+Select name as XX from Employee, Depts where _
+</codeblock>
+Having found some candidate queries with holes, the synthesizer can
+then search for predicates that lead the queries to select the correct
+set of records.
+
+Just as in the case of STUN, breaking the search into smaller search problems
+has a significant performance benefit. In this case, we are exploiting something
+about the structure of the search space, the ability to tell that a query structure
+will produce incorrect outputs before we even know what predicates are, in
+order to break the search into somewhat independent search problems. Just like
+in the STUN case, the partition is not perfect, so we may need to try many
+potential solutions to the high-level problem to see which one can actually
+be extended to a complete solution.
+
+
+
+
+<h2>Additional reading</h2>
+
+There is at this point an extensive literature on bottom-up search for program synthesis.
+An especially significant line of work relies on reframing bottom-up search in terms of 
+Tree automata. The seminal paper in that literature is by Wang, Dillig and Singh<cite>wang2017synthesis</cite>, 
+but it has been extended to a wide range of applications. 
+
+<script>
+processDocument();
+</script>
+
+<div class="footnotes">
+
+<footnotes>
+
+</footnotes>
+
+</div>
+</div>
+
+</body>
+
+
+
+</html>

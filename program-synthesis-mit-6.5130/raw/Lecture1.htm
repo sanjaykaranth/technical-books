@@ -1,0 +1,408 @@
+<html>
+
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Lecture 1</title>
+
+<script type="text/javascript" async
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-MML-AM_CHTML">
+</script>
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}});
+</script>
+<script type="text/javascript" src="library.js"></script>
+<link href="style.css" rel="stylesheet" type="text/css">
+</head>
+
+<body>
+
+
+<div class="header">
+<h1 style="color: rgb(165, 42, 42);">Introduction to Program Synthesis</h1>
+&copy; Armando Solar-Lezama. 2018, 2025. All rights reserved.
+&copy; Theo X. Olausson. 2025. All rights reserved.</div>
+
+<div id="navigator" class="sidenav">
+<a href="#about">Lecture 1</a> 
+<a href="#services">Lecture 2</a> 
+<a href="#clients">Lecture 3</a> 
+<a href="#contact">Lecture 4</a>
+</div>
+<script type="text/javascript">
+loadNavBar();
+</script>
+
+<div class="content">
+
+
+<!--
+<p style="color: rgb(42, 165, 165);">
+  Changelog:
+  <ul>
+    <li>6/11/25: Fixed typos.</li>
+    <li>6/11/25: Updated paragraph discussing compilers vs synthesis in light of learning-based synthesis becoming dominant.</li>
+    <li>6/11/25: Slightly shortened paragragh on declarative/logic programming.</li>
+    <li>6/11/25: Significantly overhauled the section on machine learning. Tried to be more precise about the differences and similarities between synthesis and ML, especially in light of the fact that ML is now a major tool for synthesis.</li>
+    <li>6/11/25: Updated "Program Synthesis Today" section to reflect the fact that students are likely to have experience using LLMs for programming. Tried to reiterate/emphasize why synthesis is still relevant in light of LLMs.</li>
+    <li>6/11/25: Updated "Invention" subsection of "Challenges" section to focus more on natural language specs and less on PBE/flashfill-style i/o pairs. Also did some minor touch ups to other subsections.</li>
+  </ul>
+</p>
+-->
+
+    <h1>Lecture 1: Introduction and Definitions <a href="https://code.playskript.com/view.html?id=9aefb6c084f0f2ea03059478ff92d5bba4d698ad36b6cc355f">(slides)</a></h1>
+
+    Back in 2021, with the introduction of Copilot, the broader development community got a first taste of what it meant 
+    for the machine to automatically write code for you. Since then, programming tools based on large language models (LLMs) 
+    have only grown in capabilities; just a year after Copilot, in 2022, AlphaCode<cite>AlphaCode</cite> was already claiming 
+    to surpass the median competitor in a programming competition. All of these advances have been made possible by the rapid 
+    progress in LLMs. But LLMs by themselves are only part of the story. Code presents unique challenges that derive from the 
+    extreme precision required to write correct programs &mdash; a few characters can be the difference between a correct 
+    program and one that contains a dangerous vulnerability. But code also presents unique opportunities; unlike other tasks
+    for which LLMs have shown promise, code benefits from precise semantics, which allow us to test it and to reason formally
+    about its behavior. 
+    <p/>    
+    This course aims to introduce students to the broad field of program synthesis, including 
+    techniques based on large language models and reinforcement learning, but also symbolic techniques with complementary capabilities. 
+    The goal is to provide a comprehensive view of the modern program synthesis toolkit, with an emphasis on the benefits and limitations 
+    of different techniques, to allow practitioners to pick the best combination of tools for a specific task. 
+    But before diving into algorithms, this lecture aims to provide some historical context and to define the field of program synthesis.
+    <p/>
+
+    <h2>What is program synthesis</h2>
+    The dream of automating software development has been present from
+    the early days of the computer age. Already back in 1945, as part of his vision
+    for the Automatic Computing Engine, Alan Turing argued that
+    <p class="quote">
+        <quote>
+            Instruction tables will have to be made up by mathematicians with computing
+            experience and perhaps a certain puzzle-solving ability…
+
+            This process of constructing instruction tables should be very fascinating.
+            There need be no real danger of it ever becoming a drudge, for any processes
+            that are quite mechanical may be turned over to the machine itself.
+            <cite>copeland2012alan</cite>
+        </quote>
+    </p>
+
+
+    Traditionally, the way automation was incorporated into software development was through
+    the use of compilers and high-level languages.
+    When the first FORTRAN compiler was developed, it was
+    touted as "The FORTRAN Automatic Coding System", with
+    its goal being nothing less than to allow the IBM 704 to
+    <quote>
+        "code problems for itself and produce as good programs
+        as human coders (but without the errors)"
+        <cite>Backus:1957</cite>
+    </quote>.
+
+    <p />
+
+    Compilation and synthesis are very closely related in terms of their goals: they both
+    aim to support the generation of software from a high-level description of its
+    behavior. In general, though, we expect a synthesizer to do more than translate
+    a program from one notation to another as traditional compilers do;
+    we expect it to discover <i>how</i> to perform
+    the desired task. The line can be blurry, though, since some aggressive optimizing
+    compilers can be argued to actually discover how to perform a computation that was
+    specified at a higher level of abstraction;
+    autoparallelization is one such example, where the compiler seeks to discover how to
+    parallelize a set of operations that have been described sequentially.
+    Historically, one distinguishing feature between a compiler and a synthesizer
+    was the use of <i>search</i>; however, this distinction has also become less clear in recent years,
+    with many compilers leveraging search techniques to optimize the generated code,
+    and with the advent of Large Language Models that can synthesize entire
+    programs without any explicit search.
+    <p />
+
+    Another class of techniques that is closely associated with synthesis is
+    <i>declarative programming</i>, and in particular <i>logic programming</i>.
+    The dream of logic programming was that programmers would be able to express
+    the requirements of their computation in a logical form, and when given an input,
+    the runtime system would derive an output that satisfied the logical constraints through
+    a combination of search and deduction. So the goals are also closely related to program synthesis,
+    but there are some important distinctions. First, rather than trying to discover an algorithm
+    to solve a particular problem, logic programming systems rely on a generic algorithm to search
+    for a solution to every problem. This means that for many problems, they can be dramatically slower
+    than a specialized program. Additionally, if the problem is under-specified,
+    the user may get a solution that is very far from that which was expected.
+
+    <p />
+
+    Finally, the field of machine learning itself forms a third class of approaches that are closely related to program synthesis.
+    The canonical problem in machine learning is finding a predictor (i.e., a function) $f : \mathcal{X} \to \mathcal{Y}$ whose
+    behavior closely matches a given dataset $D = \{(x_i, y_i)\}_{i=1}^N$.
+    In some sense, these datapoints $(x_i, y_i)$ can often be thought of as "input-output" pairs, in which case machine learning
+    becomes a form of program synthesis, where we seek the program $f$ that (perhaps imperfectly) maps each input $x_i$ to its output $y_i$.
+    However, there are some important distinctions between program synthesis and machine learning.
+    Perhaps the biggest one is that in machine learning, the space of functions under consideration is typically restricted to those that adhere to a particular structure.
+    For example, we may assume that $f$ is a linear function, or a decision tree, or a neural network with a fixed architecture.
+    By contrast, a core goal of program synthesis is to discover the structure that is needed to solve a particular problem,
+    whether it involve loops, branches, or recursion.
+    (Although, as we will see later, we will still need to impose other forms of constraints on the space of programs.)
+    Relatedly, another distinction is that because the function space is so tightly prescribed in machine learning,
+    each class of functions has its own set of highly specialized (and optimized) algorithms.
+    Meanwhile, program synthesis typically takes a broader view, leading to algorithms that are (in principle) more general.
+    Finally, traditionally there was a very important distinction in that program synthesis aspired to discovering programs
+    that <i>always precisely</i> matched the specification.
+    This has not been the case in machine learning, where the notions of learning from noisy data and using real-valued measures of success
+    has been deeply ingrained in the literature from the very start through the languages of probability, statistics, and optimization.
+    However, this distinction is somewhat less relevant today, since there is growing interest within the synthesis
+    community in algorithms that are robust to noise, or that behave well in the presence of incomplete or informal specifications.
+    <p />
+
+    In addition to thinking of machine learning as a form of program synthesis, which perhaps is more of an illuminating exercise 
+    than an idea from which we can immediately derive practically useful techniques,
+    recent years have seen a sharp increase in the use of machine learning techniques to <i>support</i> general program synthesis.
+    In particular, the use of pre-trained Large Language Models (LLMs) such as GPT-4, Claude, and Gemini to support program synthesis has 
+    been one of the most significant developments in the field over the past five years.
+    We will learn more about this in Unit 2, where we will cover the essential techniques that allow LLMs to synthesize 
+    programs and the strengths and weaknesses of learning-based techniques relative to symbolic approaches. 
+
+    <h2> A working definition of program synthesis</h2>
+
+    So if program synthesis is not compilation, it is not logic programming,
+    and it is not machine learning, then what is program synthesis?
+    As mentioned before, different people in the community have different working definitions
+    of what they would describe as program synthesis, but I believe the definition below is one
+    that both captures most of what today we understand as program synthesis and also
+    excludes some of the aforementioned classes of approaches.
+
+    <div class="quote">
+        Program Synthesis correspond to a class of techniques that are able to generate a program
+        from a collection of artifacts that establish semantic and syntactic requirements for the generated code.
+    </div>
+
+    There are two elements of this definition that are important. The first is an emphasis on the generation of a program;
+    we expect the synthesizer to produce code that solves our problem, as opposed to relying on extensive
+    search at runtime to find a solution for a particular input, as logic programming systems do.
+    The second is the emphasis on supporting specification
+    of both semantic and syntactic requirements. We expect synthesis algorithms to provide us with control
+    over the intended behavior of the generated programs, but also over how they look like &mdash; for example, 
+    what components they use, how they are structured and other non-functional aspects that we consider 
+    important. 
+    <p />
+    It is important to emphasize that individual synthesis systems may not themselves provide this flexibility; in fact,
+    a number of successful applications of program synthesis have involved specialized domains where constraints on the space of programs
+    have been "baked in" to the synthesis system. Nevertheless, even if the flexibility is not exposed to the users,
+    the underlying synthesis algorithms do have significant flexibility in how the space of programs is defined, and
+    this is a big differentiator both with respect to compilation and with respect to machine learning.
+    In general, both of these requirements imply that our synthesis procedures will rely on some form of search,
+    although the success of synthesis will be largely driven by our ability to avoid having to exhaustively search
+    the exponentially large space of programs that arise for even relatively simple synthesis problems.
+    <p />
+    It is also important to note that our definition of what constitutes a program is very specific, 
+    as we will see in <a href="Lecture2.htm#what-is-a-program">Lecture 2</a>, but it is broad enough to include not just 
+    programs in standard programming languages such as C, Java, or Python, but also other kinds of symbolic representations, 
+    such as mathematical expressions or even formal mathematical proofs. 
+
+    <h2>Program Synthesis Today</h2>
+
+    In 2025, chances are that many of you have heard of or even used program synthesis, although you may not have known it by that name.
+    Large Language Models (LLMs) have become an integral part of the software development process, whether it be through a web interface such as ChatGPT, Claude or Gemini,
+    auto-complete on steroids in your favorite IDE with Github Copilot, Tabnine or Cursor, or even end-to-end coding "agents" such as Claude Code and Cursor's Agent mode.
+    Indeed, for many of us, the fact that we can now generate a piece of code by simply describing it in natural language has become something that we almost take for granted.
+    Beyond consumer level systems, research-level models have achieved some impressive accomplishments through the use of massive
+    amounts of search and compute. For example, in 2022 the AlphaCode system from DeepMind demonstrated performance comparable to that of the
+    median human participant in a competitive programming contest<cite>AlphaCode</cite>, and shortly after, the AlphaTensor
+    paper<cite>fawzi2022alphatensor</cite> showed that it was possible to use language models to discover new algorithms for matrix multiplication
+    that were faster than the best known algorithms at the time.
+    
+    <p />
+
+    But there is more to program synthesis than LLMs. As powerful as they are, LLMs still have some important limitations:
+    they come with weak-to-nonexistent guarantees about the code they generate;
+    they can be difficult to adapt to new domains;
+    they require enormous amounts of data and infrastructure to train, and consume significant energy and compute when deployed.
+
+    <p />
+
+    Before the advent of LLMs, the focus of the field was on efficient search techniques that could explore large spaces of possible programs to find one that satisfied a set of requirements.
+    Those techniques were limited to synthesizing fairly small programs, and could not take advantage of unstructured means of specification such as natural language.
+    Despite these limitations, these techniques achieved some impressive results.
+    For example, early success stories included the ability to synthesize Karatsuba big-integer multiplication<cite>sketchthesis</cite>, Strassen's matrix-multiplication<cite>Srivastava:2010</cite>, or the functional cartesian product algorithm of Barron and C. Strachey, which is considered the first functional pearl<cite>Feser:2015</cite>.
+    The search-based techniques proved to be very effective for things like bit-vector manipulations.
+    The winner of a program synthesis competition back in 2019 was able to synthesize every bit-vector manipulation that the organizers threw at it.
+    Search-based techniques were also designed to work well with verification, enabling the synthesis of provably correct implementations of fairly complex algorithms;
+    in a few years, the field was able to move from things like sorting and list reversal to algorithms and data-structure manipulations such as insertion into red-black trees or binary heaps<cite>Polikarpova:2016</cite>.
+
+    <p />
+
+    Amidst all the hype, one would be forgiven for thinking that the advent of LLMs would mean that all of these techniques have now become obsolete.
+    In fact, they are perhaps more relevant than ever.
+    One reason why is that search-based program synthesis techniques by themselves fill an important niche in the synthesis landscape, one in which LLMs cannot (yet) compete.
+    In stark contrast to LLMs, which are trained on large amounts of data and require significant compute resources to run, search-based techniques can be engineered to be extremely efficient and effective as long as they are tailored to a specific domain.
+    There are many specialized applications where training data is either unavailable, or where the cost of running an LLM is simply prohibitive, in which case search-based techniques are still the best option.
+    Another, perhaps more important, reason is that search-based techniques are also being used to improve the performance of LLMs themselves.
+    Indeed, as we will see towards the end of Unit 2, many techniques that have been developed by the program synthesis community are already being used to improve the performance of LLMs, and to make them more reliable and easier to use even outside of the context of generating programs.
+    So, despite the success of LLMs, program synthesis remains an active area of research with research papers being published every year 
+    in all the major programming systems conferences (PLDI, POPL, OOPSLA), as well as in formal methods (CAV, TACAS) and machine 
+    learning (NeurIPS, ICLR, ICML).
+
+
+
+    <h2>Program Synthesis Applications</h2>
+
+    One of the most obvious uses of program synthesis is as a software engineering aid. This is an application with which most of you will already be familiar, as noted earlier.
+    However, there are other applications of program synthesis that may perhaps not be as obvious, but which have proven to be very impactful.
+
+    <p />
+
+    <slide>Lecture1:Slide14;Lecture1:Slide15</slide>
+
+    One important application has been in support of end-user or non-expert programming. 
+    Before we had chat interfaces in every desktop application, we had <i>FlashFill</i><cite>gulwani:2011:flashfill</cite>. 
+    FlashFill was introduced in Excel 2013 and was the first commercial application of program synthesis. 
+    FlashFill allows users to manipulate data by providing a few examples, and automatically derives
+    a small program consistent with the examples and then applies the program to the rest of your data. The success of FlashFill
+    led to an outpouring of research in end-user-programming for a variety of tasks ranging from
+    synthesizing complex database queries from examples<cite>Wang:2017</cite> or natural language<cite>Yaghmazadeh:2017</cite>,
+    to synthesizing programs for data extraction from the web<cite>barman2016ringer,inala2018webrelate</cite>.
+    This area has proven to be a good fit for program synthesis because on the one hand, there
+    is a strong need to make data analysis and cleaning accessible to non-programmers, and on the other hand, the
+    programs in question are generally small and easy to describe through examples or other forms of natural interaction.
+
+
+    <p />
+    
+    Another area that has seen major interest is the reverse engineering of code.
+    Traditionally, we think of synthesis as starting with a specification and generating
+    an implementation from that. But in this case, that paradigm is flipped on its head: starting
+    from an implementation, the goal is to infer a specification that characterizes the behavior of the given
+    implementation. The idea was first proposed by Susmit Jha, Sumit Gulwani, Sanjit Seshia and Ashish Tiwari<cite>Jha:2010</cite>.
+    The idea was further popularized by Alvin Cheung in an approach known as <i>Verified Lifting</i>, where the goal
+    is to discover a high-level representation that is provably equivalent to an implementation and that can be used
+    to generate a more efficient version of the code. The idea was first applied to the problem of generating SQL queries
+    that are equivalent to a piece of imperative code<cite>CheungSM13</cite> or the modernization of legacy HPC applications<cite>Kamil:2016</cite>. 
+    It has continued to be succesfully applied to domains such as Map Reduce programs<cite>Ahmad:2018</cite> and 
+    tensor computations<cite>qiu2024tenspiler</cite>. With the 
+    advent of LLMS, it became possible to make the approach more efficient and robust<cite>bhatia2024verified</cite>. 
+
+    <slide>
+        Lecture1:Slide27;
+        Lecture1:Slide28;
+        Lecture1:Slide29;
+        Lecture1:Slide33;
+    </slide>
+
+    <p />
+    The models generated this way can also be used to help program analysis reason about libraries for which the source 
+    code may not be accessible. For example, a paper by Jinseong Jeon et al.<cite>Jeon:2016</cite> showed that
+    it was possible to use synthesis to create models of complex reactive frameworks such as the Android and Java Swing by recording
+    traces of the interaction between the framework and a test application and then forcing the synthesizer to produce a model
+    that conforms to that trace and that follows known design patterns. A similar idea was used by 	Heule, Sridharan and Chandra
+    to synthesize models of array manipulation routines in JavaScript<cite>Heule:2015</cite>.
+
+    <p />
+
+    The application of synthesis to reverse engineering is not limited to reverse engineering programs. 
+    Back in 2013, a group led by Bodik and Koskal<cite>KoksalPSBFP13</cite> demonstrated the use of synthesis for inferring 
+    models of regulatory networks from experimental data. The idea was to think of the regulatory network as a program, and 
+    the results of experiments as observations on the behavior of the program, so the goal was to synthesize programs that 
+    were consistent with these observations. A notable aspect of this paper was that in addition to generating an interpretable 
+    model of the regulatory network, it could synthesize <i>multiple</i> models that were all consistent with the data, and could then 
+    use automated testing techniques to suggest new experiments that would be guaranteed to disambiguate between these alternative models.
+    A similar approach has been used in other domains such as understanding the morphology and phonology rules of natural 
+    languages<cite>Ellis22Linguistics</cite>, and more recently, under the term <i>symbolic regression</i> it has gained significant popularity
+    in some scientific domains as a way to build interpretable models from data<cite>cranmer2020discovering,cranmer2023interpretablemachinelearningscience</cite>.
+    The advent of LLMs has enabled this model building process to support larger and more complex models, as 
+    was demonstrated by the WorldCoder system<cite>tang2024worldcoder</cite>.
+
+    
+
+    <h2>Challenges</h2>
+
+    The advent of LLMs has transformed the field of program synthesis, allowing us to attack larger and more complex programs 
+    and to support a wider variety of specifications which have expanded beyond the traditional formal specifications 
+    and examples to include natural language and even visual inputs. As we will see in this course, the field is now mature 
+    enough that we can leverage off-the-shelf tools for many synthesis applications, and even problems for which the existing
+    off-the-shelf solutions do not work can usually be attacked by bringing together the algorithmic building blocks that we cover in this course. 
+ <p />
+    But despite these advances, there still remain a number of open challenges, whether one's goal is to support software engineering, 
+    or to synthesize programs to serve as interpretable models. 
+    Back in 2018 we proposed to group the challenges of Machine Programming into three pillars<cite>GottschlichSTCR18</cite>, 
+    and while the technology has advanced significantly since then, these pillars remain a useful grouping of the 
+    challenges we will be discussing in this course.
+
+    <p>
+        <b>Intention.</b>
+        The first challenge is what we have termed the Intention challenge: how do the users tell you their goals?
+        The definition of synthesis talks about semantic and syntactic constraints, but the exact form of these
+        will influence all subsequent decisions about the synthesis system. Historically, early successes such as
+        the FlashFill<cite>gulwani:2011:flashfill</cite> system popularized the use of input-output examples
+        as a means of specification. Examples come with a number of advantages, such as the ability to treat the examples
+        as a set of unit tests against which to validate your code, but there are many tasks for which
+        the rigidity and verbosity of input-output examples makes them unsuitable.
+        Indeed, the rise of the language modeling paradigm has led most recent work to instead adopt natural 
+        language as the primary means of specification, but natural language lacks precision and is difficult to automatically 
+        check for correctness.
+    </p>
+
+    No matter what format the specifications are given in, one big aspect of the intention challenge is how to cope with under-specification.
+    Ultimately, the only way to completely and unambiguously characterize a program is by writing down the program itself 
+    (although perhaps not in a form that is immediately executable by your machine).
+    Thus, typically in program synthesis we are almost always dealing with a situation in which there are <i>multiple</i>
+    programs that satisfy the requirements.
+    How can we tell which one the user actually wants?
+    Of course one solution is to simply ignore this problem; if the user provides a partial specification,
+    they have no right to complain if they get a different program from the one they wanted.
+    In practice, though,
+    making a good choice can make the difference between a system that is useful, and one that is not.
+    <p />
+
+
+    <p>
+        <b>Invention.</b>
+
+        Once we know what the user wants, the second challenge is to actually discover a piece of code that will
+        satisfy those requirements. Arguably this is the central challenge of synthesis, as it potentially involves
+        inventing new algorithmic solutions to a problem. One of the key questions we will be dealing with in this
+        course are different techniques that the community has developed to tackle the inherent complexity of this task.
+    </p>
+    It is important to note that while LLMs have demonstrated impressive capabilities in this regard, even solving programming 
+    competition problems that require significant algorithmic ingenuity, they are not a magic bullet. They exhibit significant 
+    deficiencies when it comes to problems farther out their training distribution, as well as generating solutions unfamiliar 
+    domains-specific languages, and often require prohibitive amounts of compute to search for a solution.
+    <p>
+        <b>Adaptation</b>
+
+        The canonical view of synthesis is that the user is creating a brand new algorithm from scratch, and wants to leverage
+        a synthesizer to create a correct implementation of the desired algorithm. However, most software development involves
+        working in the context of existing software systems, fixing bugs, optimizing code, and performing other kinds of maintenance
+        tasks. This pillar deals with the question of synthesis in a broader context, and the application of synthesis ideas
+        to broader software development tasks beyond green-field software creation.
+        There are a number of compelling applications of program synthesis in support of the broader
+        software development process, especially debugging and optimization.
+    </p>
+
+
+
+
+
+
+
+
+
+
+
+
+    <script>
+        processDocument();
+    </script>
+
+    <div class="footnotes">
+
+        <footnotes>
+
+        </footnotes>
+
+    </div>
+</div>
+
+</body>
+
+
+
+</html>

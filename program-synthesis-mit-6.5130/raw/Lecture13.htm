@@ -1,0 +1,319 @@
+<html>
+
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Lecture 13</title>
+
+<script type="text/javascript" async
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-MML-AM_CHTML">
+</script>
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}});
+</script>
+<script type="text/javascript" src="library.js"></script>
+<link href="style.css" rel="stylesheet" type="text/css">
+</head>
+
+<body>
+
+
+<div class="header">
+<h1 style="color: rgb(165, 42, 42);">Introduction to Program Synthesis</h1>
+&copy; Armando Solar-Lezama. 2022, 2025. All rights reserved.
+&copy; Theo X. Olausson. 2025. All rights reserved.</div>
+
+<div id="navigator" class="sidenav">
+
+</div>
+<script type="text/javascript">
+loadNavBar();
+</script>
+
+<div class="content">
+    <h1>Lecture 13: Program Synthesis with Reinforcement Learning <a href="https://code.playskript.com/view.html?id=a3b94a9f86a71b6c649e543fba6bd51b1359dc061161c5a6b3">(Slides)</a></h1>
+
+    Up to this point, we have talked about how language models are trained using supervised learning with an autoregressive objective.
+    
+    There is however another way to train a model to produce programs, and that is by using <i>reinforcement learning</i> (RL).
+    Unlike the supervised learning approach, RL does not require a corpus of programs to train on.
+    Instead, the idea is that the model has access to an environment that produces rewards or penalties for every action that the model takes.
+    This allows for a form of self-training, where the model discovers the best (i.e., most rewarding) actions to take in different situations.
+    <slide>
+        ReinforcementLearning:Autoregressive;
+        ReinforcementLearning:RLoverview;
+        ReinforcementLearning:mdp;
+        ReinforcementLearning:TrajectoriesPolicies
+    </slide>
+
+    <h2>A reinforement learning primer</h2>
+    In reinforcement learning, the goal is to learn how to control an agent interacting with a possibly non-deterministic environment.
+    The environment is defined by a state space $\mathcal{S}$ and a transition function $T : S \times \mathcal{A} \times S \rightarrow \mathbb{R}$.
+    Given a source state $s$ an action $a$ and a target state $s'$, the function $T(s, a, s')$ is equal to the probability that if the agent
+    in a state $s$ and it performs an action $a$, that it will transition to state $s'$. In order for $T$ to be well formed, it must be the case that for
+    all initial states and all actions, the sum of $T$ over all target states should add up to 1.
+    \[
+    \forall s. \forall a. \left(\sum_{s'} T(s, a, s') \right) = 1
+    \]
+    <p />
+    In most practical applications of RL, the environment is represented with a simulator&mdash; a complex piece of code that is not differentiable
+    or analyzable and that internally keeps track of the state of the system. For example, if we want to train an agent to play pong, the state would be
+    the position and velocity of the ball and the position of the paddles. The actions would correspond to the commands to move the paddle up or down, and the transition function
+    would be the simulator that determines the next state from the current state and the action. The uncertainty in pong comes from the adversary,
+    which may behave non-deterministically.
+    <p />
+    The goal in RL is to learn a policy $\pi: \mathcal{S} \rightarrow \mathcal{A}$ that for each state determines an action for the agent
+    and which maximizes a reward $R: \mathcal{S} \times \mathcal{A} \rightarrow \mathbb{R}$ that assigns a score to each state action pair. 
+    The policy can also be probabilistic, in which case $P_{\pi}: \mathcal{S} \times \mathcal{A} \rightarrow \mathbb{R}$ 
+    tells us the probability of taking an action $a$ in state $s$. 
+    In most interesting applications of RL, the reward is sparse; only a handful of state/actions have non-zero rewards. For example,
+    in pong, you may get a reward every time your paddle hits the ball. In the case of some games, the reward may be zero until you reach the end of the
+    game&mdash;only at that point you get a positive or negative reward depending on whether you won or lost.
+    <p />
+    A trajectory or rollout $\tau = (s_0, a_0, s_1, a_1, \ldots, s_n)$, is a sequence of states and actions starting from 
+    an initial state $s_0$. The reward of a rollout (Cumulative discounted reward) is $R(\tau) = \sum_i^{n-1} \gamma^i R(s_i, a_i)$. 
+    The discount factor $\gamma < 1$ is used to give more importance to immediate rewards than to rewards far into the future. 
+    This is especially important in infinite horizon games, where the agent is expected to play forever. 
+    The probability of a rollout given a policy is $P_{\pi}(\tau) = P(s_0) \cdot \prod_{i=0}P_\pi(a_i | s_i ) \cdot T(s_i , a_i , s_{i+1}) $
+    <p/>
+    In learning a policy, it is often useful to compute a <i>value function</i>. A value function $V_\pi(s)$ computes the expected reward if you
+    follow a policy $\pi$ starting from state $s$.  This means the value function will satisfy the following recurrence relation:
+    \[
+    V_\pi(s) = R(s, \pi(s)) + \gamma * \left( \sum_{s'}  T(s, \pi(s), s')* V_\pi(s') \right)
+    \]
+    So the reward at state $s$ is the reward for the action we take at state $s$ plus the discounted reward from the states we transition to from $s$.
+    <p />
+    <slide>
+        ReinforcementLearning:valueFunction;
+        ReinforcementLearning:valueIteration;
+        ReinforcementLearning:policyIteration
+    </slide>
+    Another useful function when learning a policy is the <i>action value function</i>, also often refered to as the Q function.
+    $Q_\pi: \mathcal{S} \times \mathcal{A} \rightarrow \mathbb{R}$. The function $Q_\pi(s, a)$ computes the expected reward if starting from state $s$, you
+    first take action $a$ and subsequently just follow the policy $\pi$.
+    \[
+    Q_\pi(s, a) = R(s, a) + \gamma  * \left( \sum_{s'}  T(s, a, s')* V_\pi(s') \right)
+    \]
+    <p />
+    When $T$ is deterministic, we can use the shorthand $T(s,a)$ to refer to the state from which $T$ transitions from $s$ on action $a$ with
+    probability one. In that case, $V$ and $Q$ simplify to
+    \[
+    V_\pi(s) = R(s, \pi(s)) + \gamma *  V_\pi(T(s, \pi(s)))  \\
+    Q_\pi(s, a) = R(s, a) + \gamma  * V_\pi(T(s, a))
+    \]
+
+    Two simple algorithms for reinforcement learning are Value Iteration and Policy Iteration. Both of these algorithms iteratively 
+    improve the policy and the value function until they converge to an optimal policy $\pi^*$ and an optimal value function $V^*$.
+    However, both algorithms are only practical when the state space is small enough to explicitly represent the value function
+    and the policy as tables. In most practical applications of RL, the state space is too large for an explicit representation. 
+    Today, most practical RL algorithms use neural networks to represent the policy and value functions, so the key is to define 
+    an optimization problem that can be solved without having to propagate gradients through the environment simulator.
+
+    <h2>Policy Gradient Methods</h2>
+    An important class of algorithms for reinforcement learning are policy gradient methods. In this section, we will describe the 
+    REINFORCE algorithm<cite>Williams1992</cite>, which is one of the simplest policy gradient methods, and was used in 
+    several early applications of reinforcement learning to program synthesis.
+<p />
+    <slide>
+        ReinforcementLearning:policyGradient;
+        ReinforcementLearning:reinforce1;
+        ReinforcementLearning:reinforce2;
+        ReinforcementLearning:reinforce3;
+        ReinforcementLearning:reinforce4;
+        ReinforcementLearning:reinforce5;
+        ReinforcementLearning:reinforce6
+    </slide>
+
+    In this algorithm, the goal is to find an optimal parameter for the policy that maximizes the expected reward for the policy. 
+    In other words 
+    \[
+    \theta^* = argmax_\theta ~ \mathbb{E}_{\tau \sim P_{\pi_\theta}(\tau)} [ R(\tau) ]
+    \]
+    In order to compute $\theta^*$, we can use gradient ascent, but this requires us to compute an expression for the gradient of the expected reward with respect to $\theta$, and we want to do this without having to differentiate through the environment simulator.
+    <p />
+    The figure on the right shows the full derivation for the gradient of the expected reward with respect to $\theta$. 
+    The final result is that the gradient can be expressed as an expectation over trajectories for the current policy $\pi_\theta$.
+    \[
+    \nabla_\theta \mathbb{E}_{\tau \sim P_{\pi_\theta}(\tau)} [ R(\tau) ] =
+    \mathbb{E}_{\tau \sim P_{\pi_\theta}(\tau)} \left[ R(\tau) \cdot \sum_{t=0}^{n-1} \nabla_\theta \log P_\pi(a_t | s_t) \right]
+    \]
+    This means that we can estimate the gradient by sampling trajectories from the current policy, computing the reward for each trajectory,
+    and then computing the sum of the gradients of the log probabilities of the actions taken in the trajectory weighted by the reward.
+    <p />
+
+     <h2>Reinforcement learning for Program Synthesis</h2>
+
+    The REINFORCE algorithm has been applied with some success to program synthesis problems, but even after chosing 
+    a synthesis algorithm, there are other important design decisions including the choice of what is the state space and what
+    are the actions that the agent can take.
+    <p />
+    The simplest way to formulate program synthesis as a reinforcement learning problem is to define the state space $S$ as the
+    set of partial programs and the actions correspond to growing the program. For example, in the context of <a href="Lecture4.htm">top-down search</a>,
+    an action correspond to selecting a hole in the program and expanding it using one of the available rules. For languages where programs
+    correspond to linear sequences of instructions, an action can simply correspond to appending an instruction at the end of the partially
+    constructed program. In this context, the reward is sparse, all states corresponding to partial programs have a reward of zero, and states corresponding to completed programs have positive or negative rewards depending on whether the program is correct or incorrect.
+    <p />
+    The first paper to take this view was written by Bunel, Hausknecht, Devlin, Singh and Kohli<cite>BunelHDSK18</cite>. Their result was improved
+    by Chen, Liu and Song<cite>ChenLS19</cite> who observed that by incorporating the state of the execution as part of the state,
+    you could leverage the program interpreter to give the policy a better sense of what the program so far can actually compute.
+    <slide>
+        ReinforcementLearning:repl1;
+        ReinforcementLearning:repl2;
+        ReinforcementLearning:repl3;
+        ReinforcementLearning:repl4;
+        ReinforcementLearning:repl5;
+        ReinforcementLearning:repl6;
+        ReinforcementLearning:repl7
+    </slide>
+    <p />
+    In 2019, Ellis, Nye, Pu, Sosa, Tenenbaum and Solar-Lezama <cite>EllisNPSTS19</cite> took this observation one step further 
+    by making the state be just the program state (the values of the variables) and not include the program text at all, 
+    as illustrated in the figure. 
+    The intuition for this is the same as the intuition behind observational
+    equivalence from <a href="Lecture3.htm">Lecture 3</a>&mdash;programs that produce the same outputs on the given inputs
+    do not have to be distinguished, and collapsing them into an equivalence class helps with symmetries.
+    Thus, in this formulation, the state $s$ is the state computed by the program so far,
+    and an action is an instruction that transforms this state to a new state. The algorithm uses REINFORCE to learn a policy that generates programs instruction by instruction, and also trains a neural network to estimate the value function. 
+    Learning a value function means that in addition to the sampling techniques that we explored in <a href="Lecture11.htm">Lecture 11</a>, we can also use the value function to guide how the algorithm samples programs. 
+    <p />
+
+    In addition to the choice of state and action space, there are other important considerations in applying reinforcement learning to program synthesis. One important observation is that the sparse reward signal, combined with the large state and action spaces, makes
+    the early stages of learning very inefficient, since the model will have to sample extensively before it finds any samples 
+    with positive reward. One way many papers have addressed this issue is by pre-training the model using supervised learning on a corpus of programs, and relying on reinforcement learning only to fine tune the model, but having a training set with a variety of programs
+    at different levels of difficulty can also help with this problem. 
+    <p />
+    Another consideration when using LLMs with RL for program synthesis is that the tradeoffs can sometimes be different from 
+    those cases where the LLM is used by itself. For example, in pure LLM-based synthesis, it is often desirable to have a very large model
+    since this tends to improve the quality of the generated programs. However, in RL-based synthesis, having a very large model can make learning more difficult, since it makes sampling substantially more expensive. 
+
+    <h2>Basic MonteCarlo Tree Search (MCTS) and AlphaZero</h2>
+    Since those early applications of RL to program synthesis mentioned earlier, reinforcement learning has become much more 
+    prominent. DeepMind, in particular, is well known for its work on reinforcement learning for games, and they have 
+    adapted some of the same algorithms to program synthesis. One of their workhorse algorithms is AlphaZero<cite>AlphaZero</cite>, which is based on an algorithm known as MonteCarlo Tree Search (MCTS)<cite>MCTS</cite>.
+    <p />
+    The goal of AlphaZero is to find a probabilistic policy $P: \mathcal{S} \rightarrow \mathcal{A} \rightarrow \mathbb{R}$ that
+    for every state $s$ and every action $a$, produces a value between zero and one representing the probability of taking action $a$ at state $s$.
+    So for example, we can compute a policy $\pi$ that always takes the highest probability policy as $\pi(s)=argmax_{a} P_\theta(s,a)$, although as we
+    shall see, the computation of the actual actions to take at a given state will be a little more involved.
+    Additionally, the algorithm will compute a value function $V_\pi(s)$ that estimates the reward that the policy will achieve starting at state $s$.
+    <slide>
+    ReinforcementLearning:mcts1;
+    ReinforcementLearning:mcts2;
+    ReinforcementLearning:mcts3;
+    ReinforcementLearning:mcts4;
+    ReinforcementLearning:mcts5;
+    ReinforcementLearning:mcts6;
+    ReinforcementLearning:mcts7;
+    ReinforcementLearning:mcts8;
+    ReinforcementLearning:mcts9
+   </slide>
+    <p />
+    The algorithm is based on deep learning, so the probabilistic policy and value functions will be represented by parametric functions $P_\theta$ and
+    $V_\theta$. In practice, $P$ and $V$ are represented by a single neural network and $\theta$ is a very large collection of parameters that controls both functions,
+    but that is a low-level implementation detail.
+    The goal of the learning algorithm is to discover a good parameter $\theta$ such that the policy achieves high rewards and the Value function $V_\theta$
+    accurately predicts the reward of following the policy for the reminder of the game starting at state $s$.
+    <p />
+    The key building block in the algorithm is MCTS. MCTS performs some local exploration in the neighborhood of a state to discover improved estimates
+    of $P$ and $V$ which can then be used to adjust $\theta$.
+   
+
+    The basics of MCTS are illustrated in the figure. In the algorithm, you start at a state $s_0$ and iteratively search the space guided
+    by an approximation of the $Q$ function built on the fly. The algorithm maintains a map representing the Q function $Q(s,a)$
+    and a counter $N(s,a)$ that tracks how many times action $a$ has been taken from state $s$. We use the shorthand $N(s)$ to refer to
+    the total number of times state $s$ has been visited $N(s) = \sum_a N(s,a)$.
+    <p />
+    The algorithm is traditionally explained in terms of four phases:
+    <p />
+    <b>Selection.</b> Traverses a path through the visited nodes in search of a node at the boundary between visited and not-visited nodes. In searching
+    for this path, the algorithm uses the following recursive formula:
+
+    \[
+    search (s) =
+    \begin{cases}
+    search(T(s,action))~\mbox{where}~action =
+    argmax_a  \left( Q(s,a) + C*P(s,a)*\frac{\sqrt{N(s)}}{1+N(s,a)} \right) \\
+    \\
+    s ~~\mbox{if s has unvisited children} \\
+    \end{cases}
+    \]
+    In other words, in taking an action for each state where all its children have been visited, it attempts to maximize a quantity that
+    considers both the $Q$ value of the proposed action, as well a measure of how desireable the current policy regards action $a$ adjusted
+    by a measure of how many times the current action has been explored relative to other actions available at this level. The constant $C$
+    is used to give more or less weight to the second component relative to the first.
+    <p />
+    <b>Expansion.</b> Once selection reaches a boundary between visited and non-visited nodes, a new node is selected that has not been
+    visited before and its $Q$ and $N$ measures are initialized.
+    <p />
+    <b>Simulation.</b> In this step, the system computes an estimate of the value of the currently expanded node. This can be done in many
+    different ways, but in the case of AlphaGo/AlphaZero, the value is red directly from the last version of the value function, unless
+    the end of the game has been reached, in which case the game is just scored explicitly.
+    <p />
+    <b>Backpropagation</b> Once a value has been computed for the node, this value can be used to compute an estimate of $Q$ for each node
+    in the path from the origin to the expanded node. For example, if values are not discounted over time (i.e. $\gamma=1$), then this just
+    means updating $Q(s,a)$ by adjusting the old value of $Q$ to $(Q(s,a)*N(s,a) + V)/(N(s,a)+1)$.
+    <p />
+    Those steps are repeated over and over again a few hundred times. After this is done enough times, the function $Q$ can be used to
+    provide an improved estimate of both the value function and the policy for the nodes visited during search. The parameters for $P$
+    and $V$ can then be adjusted to get them closer to these improved estimates. By iteratively repeating this process of
+    running MCTS and then adjusting the parameters to more closely match the $P$ and $V$ suggested by the $Q$ function, the
+    algorithm converges to a good policy and value function.
+   
+    <p />
+    
+    
+
+    <!--
+    <h2>Reinforcement Learning for LLM Post-Training</h2>
+    In the above discussion, we have focused on how to use reinforcement learning to train a program synthesis model from scratch
+    on a specific task.
+    You may wonder how this relates to the use of LLMs for program synthesis, which has been the focus of the preceding lectures.
+    The truth is that for a long time, little success was had in marrying these two techniques.
+    However, only in the last year or so, scale (and increasingly capable base models) have suddenly made it a viable possibility.
+    <p />
+    You may have heard of "thinking models" like OpenAI's O-series models, Google's recent Gemini 2.5 Pro, or DeepSeek-R1.
+    These models are all believed to have been trained using essentially the same, simple formulation of reinforcement learning.
+    The state space $S$ (TODO double check this is what Armando uses above) is the set of all strings of tokens of finite length;
+    formally, if $\mathcal{V}$ is the vocabulary of the model, then $S = \mathcal{V}^*$.
+    The action space $\mathcal{A}$ is simply the set of all tokens in the vocabulary $\mathcal{V}$.
+    The transition function $T$ is defined as $T(s, a, s') = 1$ if $s'$ is the result of appending token $a$ to string $s$, and zero otherwise;
+    more legibly, the transition function deterministically appends the chosen token (action) to the current string (the state).
+    The models only differ substantially in how they define the reward function $R$, and indeed different tasks call for different reward functions.
+    In many NLP tasks, the reward function has to somehow mimic human preferences, which is not an easy feat to accomplish.
+    Fortunately, as far as sythesis is concerned, the reward function can in many cases be objectively defined as the correctness
+    (as measured against some unit tests, or a set of pre- and post-conditions) of the program.
+    <p />
+    It is tempting to look at the above formulation and say that it is obvious; perhaps you too found yourself surprised
+    that this has only become a popular paradigm in the last year or so.
+    However, it is important to impress on yourself how remarkable it is that this simple formulation can be used to fit models with
+    hundreds of billions of parameters, acting in state spaces so large that they are impossible to enumerate, using reward functions that are so sparse they may
+    only have a non-zero value for a single state.
+    Meta's Llama-3 has a vocabulary size of $128,000$ tokens; even limiting the state space to strings of length 100, we have a state space of size $128,000^{100} \approx 10^{500}$, which is about five orders of magnitude larger than the number of atoms in the observable universe.
+    How many of these $128,000^{100}$ strings are actually valid programs? How many of those programs implement the exact specification you requested?
+    <p />
+    Getting this to work is a remarkable feat of engineering and a testament to the power of scale, but more so than anything else,
+    it requires starting with a model that is already very, very capable of understanding language and programs.
+    <p />
+    Interested readers are encouraged to read <cite>rlhf2024</cite> and <cite>murphy2025reinforcementlearningoverview</cite> for
+    more details on this quickly evolving field.
+-->
+
+    <script>
+        processDocument();
+    </script>
+
+    <div class="footnotes">
+
+        <footnotes>
+
+        </footnotes>
+
+    </div>
+</div>
+
+</body>
+
+
+
+</html>

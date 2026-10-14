@@ -1,0 +1,283 @@
+<html>
+
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Lecture 18</title>
+
+<script type="text/javascript" async
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-MML-AM_CHTML">
+</script>
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}});
+</script>
+<script type="text/javascript" src="library.js"></script>
+<link href="style.css" rel="stylesheet" type="text/css">
+</head>
+
+<body>
+
+
+<div class="header">
+<h1 style="color: rgb(165, 42, 42);">Introduction to Program Synthesis</h1>
+&copy; Armando Solar-Lezama. 2018. All rights reserved.</div>
+
+<div id="navigator" class="sidenav">
+
+</div>
+<script type="text/javascript">
+loadNavBar();
+</script>
+
+<div class="content">
+
+
+<h1>Lecture 18: A brief introduction to constraint-based verification and synthesis <a href="./Lecture18-2025.pptx">(Slides)</a></h1>
+
+There is a general approach to verification where a program is automatically converted
+into a logical statement of the form $\forall x. Q(x)$ such that if the statement is 
+valid (so $Q$ is indeed true for all $x$), then the program is correct. In this section
+we describe this process in some detail, and then in the next section we will see how 
+synthesis can be made to interact with this process in order to generate verified programs.
+<p/>
+Following the style of Winskell, we will be explaining the key concepts in this lecture 
+using a simple imperative language
+IMP shown below.
+
+<codeblock>
+expr := N | x | expr + expr | expr > expr
+cmd  := x := expr 
+      | cmd ; cmd
+      | if( expr ) cmd else cmd
+      | while( expr ) cmd
+      | skip
+</codeblock> 
+A program in this language manipulates a state $\sigma$ that maps each variable to 
+an integer value. Expressions evaluated under a given state produce a value, 
+(we will use the notation $\langle expr, \sigma \rangle \rightarrow n$ to indicate
+that expression $exp$ evaluates to $n$ under state $\sigma$). And commands (often called statements)
+transform a state into another state (we will use the notation  $\langle cmd, \sigma \rangle \rightarrow \sigma'$ 
+to indicate that command $cmd$ transforms state $\sigma$ into state $\sigma'$).
+
+
+<h2>Program Logics</h2>
+In order to understand this style of verification, we need to provide some background
+on the formalism of Program Logics, also known in the literature as Axiomatic Semantics
+or Hoare-Floyd style verification. 
+
+<p/>
+The main construction in this form of verification is the Hoare triple:
+\[
+\{ A \} cmd \{ B \}
+\]
+which indicates that for all states that satisfy some predicate $A$, if we execute command $cmd$
+starting  from this state <b>and it terminates</b> then the resulting state will satisfy predicate $B$.
+It is important to note that this is a <b>partial correctness</b> assertion, meaning that 
+the Hoare triple makes no claim as to whether or not $cmd$ actually terminates, it just says
+that if it does terminate, and you started from a state satisfying $A$, then you are guaranteed
+to end in a state satisfyng $B$. 
+
+There is a stronger version of the Hoare triple that is usually written in terms of square brackets
+\[
+[ A ] cmd [ B ]
+\] 
+which additionally implies that $cmd$ will terminate on all inputs that satisfy the predicate A. 
+
+<p/>
+<slide>
+Lecture11:Slide9
+</slide>
+The key idea in program logics is to provide a set of deduction rules that can be used to prove a
+Hoare triple. In the literature, it is common to see the notation $\vdash \{ A \} cmd \{ B \}$, where
+the $\vdash$ symbol indicates that the Hoare triple can be proven using these deductive rules.
+Each rule has the form:
+\[
+\frac{Premises}{Conclusion}
+\]
+If the premises of the rule can be proven true, then the conclusion of the rule is proven true as well.
+The figure on the right shows a complete set of rules for this language. There is one
+rule for each construct, which at first sight seem very specific. For example, the rule for 
+assignment says that we can prove a postcondition $A$ holds after an assignment $x:=e$, 
+if we have a precondition of the form $A[x\rightarrow e]$, which corresponds to the predicate $A$
+but with all occurences of $x$ replaced with $e$. This makes sense, for example, using this rule, 
+we can prove the following hoare triples: 
+\[
+\begin{array}{ll}
+\{y > 10\} x := y \{ x > 10\} & \mbox{if } y > 10 \mbox{ before x:= y then afterwards } x > 10 \\
+\{x + 1 > 10\} x := x + 1 \{ x > 10\} & \mbox{if } x + 1 > 10 \mbox{ before x:= x + 1 then afterwards } x > 10\\
+\{7 > t\} x := 7 \{ x > t\} & \mbox{if } 7 > t \mbox{ before x:= 7 then afterwards } x > t \\
+\end{array}
+\]
+ But it also seems very restrictive, for example, suppose we want to prove 
+ \[
+ \{ y >  7 \} x := y \{ x > 0 \}
+ \]
+ This is clearly true, but it does not quite match the form of the rule for assignment. In order 
+ to prove this, we need the rule of consequence. The rule for assignment does not allow us to 
+ directly prove the triple above, but we can use it to prove $\{ y >  0 \} x := y \{ x > 0 \}$. 
+ But because $(y > 7) \Rightarrow (y > 0)$ and $(x > 0 ) \Rightarrow (x > 0)$, the rule of consequence
+ allows us to prove that the Hoare triple above is valid.
+ 
+ <p/>
+ <slide>
+ Lecture11:Slide10;
+ Lecture11:Slide11;
+ Lecture11:Slide12;
+ Lecture11:Slide13
+ </slide>
+ One way to visualize the rules is to view each predicate as a set of states satifying that
+ predicate. So a Hoare triple $\{A\}~cmd~\{B\}$ ensures that any state in the set of states 
+ satifying $A$ will be mapped by $cmd$ to a state in the set of states satisfying $B$. 
+ The figure illustrates the different rules in terms of how they map states in the precondition 
+ to states in the post-condition. 
+ 
+ <p/>
+  
+ For example, the rule for while loop is saying that if you can show that
+ any state that satisfies both $A$ and $b$ is always mapped to another
+ state that satisfies $A$, then starting from a state satisfying $A$, 
+ if the loop ever terminates, then when it does the state will still 
+ satisfy $A$, but will also satisfy $\neg b$.
+
+ <p/>
+ &nbsp;
+  <p/>
+
+ 
+<h2>Example</h2>
+
+
+The following example illustrates how the rules can be used to prove
+a property for a given program. The figure shows a program with a 
+pre and post condition that we wish to prove and illustrates the process of 
+constructing the proof. Notice that every time we apply a rule, the 
+premises of the rule create new proof obligations that need to be 
+discharged by using other deductive rules.
+<slide>
+Lecture11:Slide15;
+Lecture11:Slide16;
+Lecture11:Slide17;
+Lecture11:Slide18;
+Lecture11:Slide19;
+Lecture11:Slide20;
+Lecture11:Slide21;
+Lecture11:Slide22;
+Lecture11:Slide23;
+Lecture11:Slide24
+</slide> 
+<p/>
+The figure illustrates the first few steps of the 
+proof. The proof proceeds very mechanically until we get
+to a proof obligation involving loops. This proof obligation 
+is problematic because the rule for loops has a very particular form. 
+It is given in terms of a predicate ${A}$ that must be preserved by 
+each iteration of the loop. However, the pre and post-conditions 
+of the while loop in the example do not match this form. 
+This means that in order to make the proof work, we need to discover
+a predicate $A$ that is then connected to the pre and post conditions 
+using the rule of consequence. From the figure, we can see that the
+use of the rule of consequence together with the rule for loops leaves us 
+with three proof obligations.
+<ul>
+<li> The precondition must imply $A$. </li>
+<li> $A$ and the negation of the loop condition must imply the postcondition. </li>
+<li> When the loop condition is true, $A$ must be preserved by the loop body. </li>
+</ul>
+This predicate $A$ is a loop invariant, and in general, it cannot be discovered
+algorithmically. In the case of the example, we can see that the conditions
+can be satisfied by the predicate below. 
+\[
+A~\equiv~ 
+\begin{array}{ll}
+&x=y_{old}+t \\
+\wedge& y=x_{old}-t \\
+\wedge & t>=0
+\end{array}
+\]
+Using this invariant, we can now complete the proof that the Hoare triple in the example is indeed correct.
+
+
+<h2 id="termination">From partial to total correctness</h2>
+<slide>
+Lecture11:Slide27;
+Lecture11:Slide28;
+Lecture11:Slide29;
+Lecture11:Slide30;
+Lecture11:Slide31;
+Lecture11:Slide32
+</slide> 
+
+Proving total correctness is very similar. In fact, the total correctness rules for everything that doesn't involve
+a loop are exactly the same. It is only with loops that termination becomes an issue. 
+The rule for loops is more involved, because in addition to the invariant $A$, it also includes a 
+<i>Rank function</i> $F$, also refered in the literature as a <i>Variant function</i>. 
+The Rank function allows us to construct an inductive argument for the termination of the loop. 
+The Rank function maps the state to an integer value and imposes two conditions:
+<ul>
+<li> It is greater than or equal to zero for any state where the invariant and the loop condition hold. </li>
+<li> It decreases with every iteration of the loop</li>
+</ul>
+
+For the running example above, the variant function is just $t$. It is easy to prove that that the loop body will decrement $t$ on every iteration, 
+and that $t \geq 0$ for every state that satisfies the loop condition. This implies that eventually the loop condition will have fail.
+
+
+<h2>Weakest Preconditions and Verification Conditions</h2>
+<slide>
+Lecture11:Slide33;
+Lecture11:Slide34;
+Lecture11:Slide35
+</slide>
+The approach outlined above allows us to prove properties of complex programs, but it is not very mechanical, as it involves a fair 
+amount of human judgement, not just in determining the loop invariants and rank functions, but also in determining when and how 
+to apply the rule of consequence. We will now introduce an approach that is more mechanical, although it is still going to require
+users to provide loop invariants. 
+<p/>
+
+To explain this approach, first we need to introduce the concept of a <i>weakest precondition</i>. The weakest precondition $wpc(cmd, B)$
+is a precondition such that the Hoare triple $\{wpc(cmd, B)\} cmd \{B\}$ is valid and any other valid precondition $A$ is stronger, 
+i.e.  $\vdash \{A\} cmd \{B\}$ valid iff $A \Rightarrow wpc(cmd, B)$. 
+<p/>
+
+Now, suppose we had an algorithmic way of computing $wpc(cmd, B)$ for any command $cmd$ and any postcondition $B$. Then checking
+whether a Hoare triple $\{A\} cmd \{B\}$ is valid or not would reduce to checking whether the implication $A \Rightarrow wpc(cmd, B)$ holds.
+For loop free programs, it is possible and relatively easy to compute $wpc$. The rules for computing it are shown in the figure. 
+
+As one might expect, though, it is in general not possible to compute $wpc$ algorithmically for programs with loops. Instead, we are going 
+to settle for a <i>Verification Condition</i> $vc(cmd, B)$. The verification condition $vc(cmd, B)$ is a valid precondition, so 
+$\{vc(cmd, B)\} cmd \{B\}$ is guaranteed to be valid. However, it is not guaranteed to be the weakest precondition. 
+This means that if $A \Rightarrow vc(cmd, B)$, then we can be sure that $\vdash \{A\} cmd \{B\}$, just from the rule of consequence. 
+However, if $A \Rightarrow vc(cmd, B)$ does not hold, then we have no way of knowing whether it was because the Hoare triple 
+ $\{A\} cmd \{B\}$ is not valid, or whether the triple is valid, but $vc(cmd, B)$ is just not good enough to prove it.
+
+<p/>
+The rules for computing the $vc$ for constructs other than loops are the same as those for computing the $wpc$. 
+For loops, the rule is shown in the figure. Note that the rule is given in terms of a loop invariant $I$, that we expect to annotate
+the loop. It is interesting to note that the property that $\vdash \{vc(cmd, B)\} cmd \{B\}$ will hold regardless of what invariant
+we provide. We could even use a random expression generator to generate an invariant, and the property would still hold. This means
+that we do not have to trust whoever provides the loop invariant, as long as  $A \Rightarrow vc(cmd, B)$, then we will know
+that $\vdash \{A\} cmd \{B\}$. The catch, of course, is that if we provide a garbage invariant, $vc(cmd, B)$ is likely to 
+evaluate to $false$. It turns out $false$ is a valid precondition for any postcondition, just not a very useful one when it comes
+to proving things. 
+ 
+
+
+<script>
+processDocument();
+</script>
+
+<div class="footnotes">
+
+<footnotes>
+
+</footnotes>
+
+</div>
+</div>
+
+</body>
+
+
+
+</html>

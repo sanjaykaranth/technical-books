@@ -1,0 +1,391 @@
+<html>
+
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Assignment 2</title>
+
+<script type="text/javascript" async
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-MML-AM_CHTML">
+</script>
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}});
+</script>
+<script type="text/javascript" src="library.js"></script>
+<link href="style.css" rel="stylesheet" type="text/css">
+</head>
+
+<body>
+
+
+<div class="header">
+<h1 style="color: rgb(165, 42, 42);">Introduction to Program Synthesis</h1>
+&copy; Armando Solar-Lezama. 2018. All rights reserved.</div>
+
+<div id="navigator" class="sidenav">
+<a href="#about">Lecture 1</a> 
+<a href="#services">Lecture 2</a> 
+<a href="#clients">Lecture 3</a> 
+<a href="#contact">Lecture 4</a>
+</div>
+<script type="text/javascript">
+loadNavBar();
+</script>
+
+<div class="content">
+
+
+<h1>Assignment 2</h1>
+
+<b>Submission Instructions</b>
+This assignment is due at 5pm on the date indicated in the
+<a href="index.htm"> class calendar</a>.
+To submit your code, put question1a.sk and question1b.sk in the q1/ directory and compress the whole parent directory containing q1/ and q2-3/ into a .tar.gz file, then submit it through the Canvas assignment.
+
+<p/>
+
+<b>Collaboration policy</b>
+You are allowed to consult with at most one other student
+while working on the pset, but every student is responsible for
+writing their own code and submitting their own work. If you
+do consult with another student, you should explicitly acknowledge
+them in your submission (you can do that in a comment in <code>question1a.sk</code>).
+
+<h2>Problem 1 (30 pts)</h2>
+
+For this problem, you will be encoding an arithmetic language in Sketch to synthesize expressions matching input output examples.
+
+You should download the latest version of sketch from
+<a href='http://people.csail.mit.edu/asolar/sketch-1.7.6.tar.gz'>here</a>. <b>Note: unless you run into issues, do <i>not</i> follow the build instructions. Just unzip the file, and then run
+	the binary located at sketch-frontend/sketch</b>. On some operating systems (e.g. one TA's M1 Mac) you may need to follow the build instructions.
+	To test that your installation is working, you may find it useful to ensure that the first example sketch (<code>doubleSketch</code>) from the manual works.
+	
+
+<p>Consider the following simple arithmetic language:</p>
+<codeblock>
+	Int :=
+	| n.................................// numeric constant
+	| x.................................// variable
+	| Plus(int, int):int................// addition
+	| Times(int, int):int...............// multiplication
+	| ITE(bool, int, int):int...........// if-then-else
+	Bool :=
+	| false.............................// constant false
+	| true..............................// constant true
+	| Lt(int, int):bool.................// less than
+	| Not(bool):bool....................// boolean negation
+	| And(bool, bool):bool..............// boolean conjunction
+</codeblock>
+
+<h3>Problem 1.a</h3>
+
+Encode the arithmetic grammar from above as a generator in Sketch, using it to synthesize functions solving the following examples:
+<codeblock>
+x=5, y=5, out=15;
+x=8, y=3, out=14;
+x=1234, y=227, out=1688;
+</codeblock>
+And
+<codeblock>
+x=10, y=7, out=17
+x=4, y=7, out=-7
+x=10, y=3, out=13
+x=1, y=-7, out=-6
+x=1, y=8, out=-8
+</codeblock>
+
+Starter code for this problem can be found <a href="question1.sk">here</a>.
+You will find the <a href='http://people.csail.mit.edu/asolar/manual.pdf'>sketch language reference</a> useful.
+Submit your code as <code>question1a.sk</code>.
+
+<h3>Problem 1.b</h3>
+
+In a copy of the file, add the following constraints:
+<ul>
+	<li>Multiplications can only occur between variables and constants or between two variables</li>
+	<li>Comparisons cannot include any arithmetic, only variables and constants</li>
+</ul>
+
+Submit your code as <code>question1b.sk</code>.
+
+<h2>Problem 2 (40 pts)</h2>
+
+<p>
+Top-down searches (<a href="Lecture4.htm">Lecture 4</a>) are widely used technique in program synthesis as they are simple and general, not requiring the context-independent equivalence property relied on by bottom-up approaches.
+Top-down enumeration exhaustively explores a space of programs in a grammar by repeatedly expanding holes in the current partially-constructed program using production rules from the grammar.
+A key part of <i>efficient</i> top-down enumeration is the ability to perform these expansions by <i>mutating the program in-place</i>, rather than making a copy of the entire program at each step.
+When the search hits a dead end (e.g. a size limit is reached, or an incorrect program is found) we require the ability to backtrack by undoing the expansions ("unexpanding") in-place.
+This problem will guide you through implementing expansion and unexpansion, then using them to implement the overall top-down search algorithm.
+</p>
+
+Skeleton code for this problem can be found <a href="pset2.tar.gz">here</a>.
+
+<p>
+First, move to the <code>q2-3/</code> directory and run the following command to install the necessary packages:
+</p>
+<codeblock>
+julia --project -e 'using Pkg; Pkg.instantiate()'
+</codeblock>
+
+Then run the following command to make sure everything is set up properly:
+<codeblock>
+julia --project test/internal.jl
+</codeblock>
+
+Notes:
+<ul>
+	<li>You can see some example graphics programs in the language <a href="pset2_content/pset2_viewer.html">here</a>.</li>
+	<li>The code you write will not be specific to the graphics domain, but the tests will run in the graphics domain so it may be helpful to take a look at the grammar and associated comments in <code>src/drawing_domain/drawing_grammar.jl</code>.</li>
+	<li>Don't edit the type signatures of the functions you implement.</li>
+</ul>
+
+
+<h3>Problem 2.a</h3>
+
+<p>
+First, write implementations of the following functions in <code>src/program_search/expansion.jl</code>. Refer to the definitions and docstrings of the expression type <code>struct Exp</code> and the production rule type <code>struct Production</code> to understand their structure.
+</p>
+<ul>
+<li>
+<code>expand_inner</code>: Applies a production to a hole to turn it into an expression with new holes as arguments. This should mutate the hole expression in place to have a new <code>.head</code>, <code>.data</code>, and <code>.args</code>.
+</li>
+<li>
+<code>unexpand_inner</code>: Undo all the effects of <code>expand_inner</code>, replacing the expression with a hole of the given type.
+</li>
+</ul>
+
+You can test your implementation with the following command:
+<codeblock>
+julia --project test/q2a.jl
+</codeblock>
+
+<h3>Problem 2.b</h3>
+
+Implement <code>expand</code> and <code>unexpand</code> in <code>src/program_search/top_down.jl</code>. 
+These functions should call <code>expand_inner</code> and <code>unexpand_inner</code>, and modifying the search state (<code>struct TopDownSearch</code>) fields <code>.e</code>, <code>.weight</code>, and <code>.holes</code> appropriately.
+See the definitions of <code>struct TopDownSearch</code> and <code>struct SubExp</code> for the expected structure.
+
+<ul>
+	<li><code>expand()</code> can assume that the hole to be expanded has already been popped from <code>.holes</code>, so it shouldn't do that.</li>
+	<li>Since <code>unexpand()</code> is the inverse of <code>expand()</code>, it also shouldn't push the unexpanded hole back onto <code>.holes</code>.</li>
+	<li>The testing code assumes that new holes are pushed to the end of <code>.holes</code> and are ordered from left to right</li>
+</ul>
+
+You can test your implementation with the following command:
+
+<codeblock>
+julia --project test/q2b.jl
+</codeblock>
+
+<h3>Problem 2.c</h3>
+
+Implement <code>top_down_search</code> in <code>src/program_search/top_down.jl</code>.
+This function should perform a depth-first top-down enumerative search, and will call <code>expand</code> and <code>unexpand</code>.
+The search should be bounded in a few ways, configured by <code>search.config</code> (see <code>struct TopDownConfig</code>).
+
+<ul>
+	<li>It won't perform an expansion if it would cause the weight to exceed <code>config.max_weight</code>.</li>
+	<li>It won't perform an expansion if the number of expansions performed (<code>search.result.stats.expansions</code>) exceeds <code>config.max_expansions</code>.</li>
+	<li>It only attempts to evaluate a completed program if the weight of the program is greater than or equal to <code>config.min_weight</code>.</li>
+</ul>
+
+The last condition might seem odd, but it's relevant because your top-down search code will be executed by the testing code within
+a larger iterative deepening search, which will first attempt to find all programs in the weight range [0, 1.0], then [1.0, 2.0], etc.
+The last condition avoids wasting effort re-evaluating solutions that were encountered in earlier iterations of the iterative deepening search.
+
+<p>
+The pseudocode for the <code>top_down_search</code> function you will implement is given below:
+</p>
+<ul>
+	<li>Pop a hole from the end of <code>search.holes</code>.</li>
+	<li>For each production in the grammar:</li>
+		<ul>
+			<li>If the production's return type does not match the hole's type, skip it.</li> 
+			<li>If expanding to it would cause the weight to exceed the max weight, skip it.</li>
+			<li>If the number of expansions so far is greater than the maximum number of expansions allowed, skip it.</li>
+			<li>Expand the hole with the production.</li>
+			<li>If there <i>are no</i> more remaining holes to expand AND the weight is greater than or equal to the min weight, evaluate the solution with <code>evaluate_solution(search)</code>.</li>
+			<li>If there <i>are</i> remaining holes to expand, recursively call <code>top_down_search(search)</code>.</li>
+			<li>Unexpand the hole.</li>
+		</ul>
+	<li>Push the hole back onto <code>search.holes</code>.</li>
+</ul>
+
+
+<p>
+    You can test your implementation with the following command:
+</p>
+
+<codeblock>
+julia --project test/q2c.jl
+</codeblock>
+
+<h3>Problem 2.d</h3>
+In this part we'll explore the value of types in constraining the size of the search space.
+
+<p>Modify <code>top_down_search</code> so that if <code>config.disable_types</code> is true, it doesn't check that the production type matches the hole type.</p>
+
+
+To measure the size of the search space more easily, we've created a test that doesn't actually execute programs, and just reports the number
+of expansions and number of complete programs encountered at each layer of the iterative deepening search. Run it with the following command:
+
+<codeblock>
+    julia --project test/q2d.jl
+</codeblock>
+
+This will run the search with and without type-based pruning - you should get a dramatic difference in the number of expansions and completions.
+
+<h2>Problem 3 (30 pts)</h2>
+<p>
+	Note on dependencies with Problem 2: Part 3(b-d) rely on having finished 2(b); part 3(c) is similar to 2(c) so doing 2(c) first is recommended; and the ungraded final DreamCoder test at the end of Problem 3 relies on having finished 2(c).
+</p>
+
+This problem builds on the previous problem, exploring component discovery (<a href="Lecture9.htm">Lecture 9</a>) in the same graphics domain, which is inspired by a domain from the DreamCoder paper.
+
+In Part (a), you'll be using an off-the-shelf component discovery tool (Stitch) to discover components in the graphics domain.
+Stitch approaches component discovery through a top-down search over the space of components, made efficient through a branch-and-bound strategy.
+In Part (b-d), you'll be implementing a component discovery algorithm that incorporates some of the core ideas of Stitch.
+
+
+<h3>Problem 3.a</h3>
+Install the Python bindings for Stitch from <a href="https://stitch-bindings.readthedocs.io/en/stable/">here</a>.
+
+<p>
+Modify <code>q3a.py</code> to call Stitch on the ground truth programs in <code>data/graphics.json</code>. Run Stitch for 3 iterations with a max arity of 3.
+Print out the 3 components (abstractions) along with the rewritten programs. Include the output of your code in the placeholder comment at the bottom of the file.</p>
+<p>What do you think each of the components do? Add a comment very briefly explaining each component. It can be helpful to look at which rewritten programs the components are used in.</p>
+
+<h3>Problem 3.b</h3>
+
+As discussed in <a href="Lecture9.htm">Lecture 9</a>, at each step of search Stitch expands a <i>partial component</i> with a production from the grammar.
+For example, we might expand the rightmost hole of <code>(+ ?int ?int)</code> with the production <code>(* ?int ?int)</code> to get <code>(+ ?int (* ?int ?int))</code>.
+<p>
+When expanding a hole with a production, the new partial component will match at a <i>subset</i> of the locations it matched at before.
+This subset property is critical to the efficiency of the search: to get our new set of matches after an expansion, we can simply filter the original set of matches
+to only keep the ones where the chosen production (<code>(* ?int ?int)</code>) appears at the expansion location.
+</p>
+
+Implement <code>subset_matches_to_production</code> in <code>component_search/branch_and_bound.jl</code>. This function performs the subsetting operation described above, setting <code>search.matches</code> to a (new) filtered list of matches - but doesn't mutate the input list of matches nor the original <code>search.matches</code>.
+
+A few points that may be helpful:
+
+<ul>
+	<li>The list of matches is a list of Exp objects corresponding to the top node that the component is matching at. Each of these Exp objects has its <code>.scratch</code> field populated with a <code>CorpusData</code> object which contains the production and total weight of the expression; you can access it through the <code>corpus_data(e::Exp)</code> function.</li>
+	<li>You can assume all children and descendants of the matches similarly have <code>CorpusData</code> objects.</li>
+	<li>You will likely need to use <code>get_descendant(e::Exp, zipper::Vector{Int})</code> to get the descendant of an expression at a given zipper.</li>
+	<li>The tests will apply your implementations of <code>expand</code> and <code>unexpand</code> from Problem 2(b) to the <code>ComponentSearch</code> type (this likely doesn't require any changes on your part since the structs are similar).</li>
+</ul>
+
+You can test your implementation with the following command:
+<codeblock>
+	julia --project test/q3b.jl
+</codeblock>
+
+<h3>Problem 3.c</h3>
+
+Implement <code>branch_and_bound</code> in <code>component_search/branch_and_bound.jl</code>.
+
+This is the main loop of the component search, and will be quite similar to the implementation of <code>top_down_search</code> from Problem 2(c).
+There are a few points at which it's noted that you must call a specific function - be sure to do so, as it's key to automatically incorporating some extensions later.
+
+The pseudocode is given below:
+<ul>
+	<li>Keep the original <code>search.matches</code> in a variable (to restore at the end).</li>
+	<li>Pop a hole from the end of <code>search.holes</code>.</li>
+	<li>For each production in <code>possible_productions(search)</code>: (note: you must call the provided <code>possible_productions</code> function)</li>
+		<ul>
+			<li>If <code>ill_typed_production(production, hole)</code> is true, skip it. (Note: you must call this function.)</li> 
+			<li>Subset the matches to the production (careful with which matches you use here!).</li>
+			<li>If <code>prune_search(search)</code> is true, skip it (for now this is always false, pruning will be added in the next part).</li>
+			<li>Expand the hole with the production using your existing implementation of <code>expand</code>.</li>
+			<li>If there <i>are no</i> more remaining holes to expand, evaluate the component with <code>evaluate_component(search)</code>.</li>
+			<li>If there <i>are</i> remaining holes to expand, recursively call <code>branch_and_bound(search)</code>.</li>
+			<li>Unexpand the hole.</li>
+		</ul>
+	<li>Push the hole back onto <code>search.holes</code>.</li>
+	<li>Set <code>search.matches</code> to the original matches.</li>
+</ul>
+
+You can test your implementation with the following command. It will only find components that don't use variables, so
+it will just find various large, common subtrees.
+
+<codeblock>
+julia --project test/q3c-novars.jl
+</codeblock>
+
+However, through <code>component_search/vars.jl</code>, we've added support for variables which should allow for some
+more interesting components. You shouldn't have to make any changes unless you run into issues. Run it with the following command:
+
+<codeblock>
+julia --project test/q3c-vars.jl
+</codeblock>
+
+<h3>Problem 3.d</h3>
+
+Implement the following functions in <code>component_search/branch_and_bound.jl</code>:
+<ul>
+	<li><code>upper_bound</code>: As in lecture, simply take the sum of the total weights of the matches (Hint: use <code>corpus_data</code>).</li>
+	<li><code>prune_search</code>: Return true if this branch of the search should be pruned. Include the following checks:
+		<ul>
+			<li>If the number of matches is less than 2, return true. This is just to avoid uninteresting components that appear in a single place.</li>
+			<li>If the upper bound is less than or equal to the utility of the best component found so far (stored in <code>search.result</code>), return true.</li>
+			<li>If <code>prune_useless_arg(search)</code> returns true, then return true. This function is implemented for you,  and is an optimization of Stitch saying if an argument always takes the same value, then we can prune the component (because there exists a better component that doesn't have an argument at all and just includes the value in the body of the component).   </li>
+			<li>You don't need to implement it, but Stitch had one more form of pruning: if a component has two arguments but within each match location the two arguments are always the same as each other, then the component can be pruned (because it's better to just reuse the same argument twice).</li>
+		</ul>	
+	</li>
+</ul>
+
+
+You can see the effect of pruning even on the small set of graphics programs with the following command:
+<codeblock>
+	julia --project test/q3d-base.jl
+</codeblock>
+
+<h3>Problem 3.e (optional, ungraded)</h3>
+There's no implementation in this section, just a few extra commands to try. The pruning from the previous part also allows us to scale up to the nuts-bolts domain used in the <a href="https://dl.acm.org/doi/10.1145/3571234">Stitch paper</a> (originally from <a href="https://arxiv.org/abs/2205.05666"></a>Wong et al. 2022</a>).
+You can run this domain with the following command (note that this doesn't run the without-pruning version as that fails to terminate):
+<codeblock>
+	julia --project test/q3d-scaling.jl
+</codeblock>
+
+Finally, equipped with a component discovery algorithm, we can recreate a simple version of the DreamCoder synthesis loop,
+alternating between component discovery to add new components to the grammar and synthesis to find new solutions to run component discovery on.
+
+You can run it with the following command:
+<codeblock>
+	julia --project test/q3d-dreamcoder.jl
+</codeblock>
+
+If you have multiple cores, you can add a <code>julia -t [num_threads]</code> flag to the command to use multiple threads.
+
+You should see that the first 5 tasks are solved in the first iteration. A polygon drawing component is learned which is then used to solve tasks 7-8.
+From these, a chain of polygons component is learned. The discovery of the polygon component brings the search closer to solving the last few tasks which have
+to do with rotational symmetry, but the search as-is is not quite able to solve them.
+
+<p>
+	You can use the following command to run all tests from Problems 2 and 3 (except for the dreamcoder test since it takes longer):
+</p>
+
+<codeblock>
+	julia --project src/run_all_tests.jl
+</codeblock>
+
+<script>
+processDocument();
+</script>
+
+<div class="footnotes">
+
+<footnotes>
+
+</footnotes>
+
+</div>
+</div>
+
+</body>
+
+
+
+</html>

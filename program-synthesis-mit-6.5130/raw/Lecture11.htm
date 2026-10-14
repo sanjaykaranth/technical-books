@@ -1,0 +1,260 @@
+<html>
+
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Lecture 11</title>
+
+<script type="text/javascript" async
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-MML-AM_CHTML">
+</script>
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}});
+</script>
+<script type="text/javascript" src="library.js"></script>
+<link href="style.css" rel="stylesheet" type="text/css">
+</head>
+
+<body>
+
+
+<div class="header">
+<h1 style="color: rgb(165, 42, 42);">Introduction to Program Synthesis</h1>
+&copy; Theo X. Olausson. 2025. All rights reserved.</div>
+
+<div id="navigator" class="sidenav">
+
+</div>
+<script type="text/javascript">
+loadNavBar();
+</script>
+
+<div class="content">
+
+
+<h1>Lecture 11: Sampling from Large Language Models <a href="https://code.playskript.com/view.html?id=c2932f32fea250104c9a902b81615386c7bd69e4956ea7055e" target="_blank">(Slides)</a> </h1>
+
+    In the last lecture, we saw how to construct (large) language models, and some of the basic ideas behind their training.
+  In this lecture, we will see how the models can be used for program synthesis. 
+
+  <h2> Basic sampling </h2>
+   <slide>
+      Sampling:Greedy1;
+      Sampling:Greedy2;
+      Sampling:Greedy3;
+      Sampling:Beam1;
+      Sampling:Beam2;
+      Sampling:Beam3;
+      Sampling:Beam4
+    </slide>
+    Fundamentally, language models parametrize distributions $p_\theta(\overline{t})$ over sequences of tokens $\overline{t} = t_1, \ldots, t_n$,
+    with a key property that because of the way the models are trained, they learn not just the joint distribution over sequences of tokens,
+    but also the conditional distribution over the next token given the previous ones. It is important to note that 
+    in order to obtain probabilities, the output of the model is passed through a softmax layer,
+    which converts the raw scores produced by the model into a probability distribution over the tokens in the vocabulary. 
+    The softmax includes a <i>temperature</i> parameter $\tau$, which is used to control the entropy of the distribution.
+    $$
+  softmax(z_i) = \frac{\exp(z_i / \tau)}{\sum_j \exp(z_j / \tau)}
+    $$
+    When $\tau \to 0$, this distribution approaches the delta distribution on the most likely token, and when $\tau \to \infty$, it approaches the uniform distribution over all tokens.
+    <p />
+    For most synthesis problems, we start with a prefix of tokens $t_1, \ldots, t_k$ 
+    which contains all the evidence that we want to condition on. This is the prompt, and may include information
+    such as a natural language description of the task, some input-output examples, and perhaps some pseudocode or other
+    information relevant to describe the task.
+    <p />
+    One naive way to use the model is to start with the prompt and then pick the most likely next token $t_{k+1} = \arg\max_t p_\theta(t | t_1, \ldots, t_k)$,
+    then append this token to the prompt and repeat until we reach the end of the sequence.
+    This is known as <i>greedy decoding</i>, and while it is simple, it has been found to produce bad results in practice; 
+    it has been observed in particular to produce stuttering and other artifacts not present in the training data<cite>holtzman2020curious</cite>. 
+    <p/> 
+    Some of the problems with greedy decoding come from the fact that it is greedy, and therefore may not actually be producing 
+    the highest probability sequence. One way to address this is to perform a <i>beam search</i>. 
+    The key idea behind beam search is to maintain a <i>beam</i> of the $k$ most likely prefixes at each step of the sampling process.
+    At each step, we expand each prefix in the beam by one token, and then keep only the $k$ most likely prefixes among all the expanded prefixes.
+    This way, we can explore multiple possible continuations of the prompt, while still keeping the search space manageable. 
+    Unfortunately, beam search leads to the same types of problems as greedy decoding. 
+    <slide>
+      Sampling:GreedyProblem;
+      Sampling:Nucleus1;
+      Sampling:Nucleus2;
+      Sampling:Nucleus3;
+      Sampling:Nucleus4
+    </slide>
+    <p/> 
+    As it turns out, despite the fact that the output of the model is meant to represent the probability distribution over the 
+    next token, making the best use of this information to produce a high-quality output is not as straightforward. 
+    For example, another approach is to simply sample directly from the distribution $t_{k+1} \sim p_\theta(t | t_1, \ldots, t_k)$.     
+    As was also documented by Holtzman et al., though, this approach also produces poor results. 
+    The problem is that the distribution contains a long tail of low-probability tokens, so even though these tokens individually have 
+    very low probability, the probability of sampling one of them is quite high, leading to incoherent outputs.
+    To address this, Holtzman et al. proposed a sampling strategy called <i>nucleus sampling</i>, where instead of sampling from the full distribution,
+    we first restrict the distribution to the smallest set of tokens whose cumulative probability is at least $p$ (for some parameter $p$), and then sample from this restricted distribution.
+    
+    <h2> Search </h2>
+    Everything we have discussed so far comes from the world of natural language processing, where the goal is to produce text that is coherent, but it is 
+    difficult to mechanically evaluate the quality of the output. In contrast, program synthesis can frequently benefit from hard 
+    constraints on the outputs, such as passing a set of unit tests. Additionally, programming languages tend to have much stronger 
+    syntactic constraints than natural languages, which can be exploited to identify invalid outputs. As a result, 
+    synthesizing a program that satisfies the hard constraints often requires generating many candidate programs and then filtering them based on the constraints.
+    <p />
+    <b>Notation.</b> We will use the notation $p_\theta(\cdot)$ to denote the distribution over strings induced by a language model with parameters $\theta$.
+    For hard constraints $\mathcal{C}$, we will use the notation $p_\theta(\cdot | \mathcal{C})$ to denote the distribution over strings that satisfy the constraint $\mathcal{C}$,
+    and we will use $1(s \models \mathcal{C})$ to denote the indicator function that returns 1 if the string $s$ satisfies the constraint $\mathcal{C}$ and 0 otherwise.
+    With some abuse of notation, when we write $p_\theta(\cdot ; p)$ we will mean the distribution over continuations of the prompt $p$.
+    We will also use the notation $++$ to denote concatenation of prompts.
+    
+    <h2>Rejection sampling</h2>
+    The simplest way to obtain a sample which adheres to some hard constraint $\mathcal{C}$ is to use <i>rejection sampling</i>.
+    Algorithmically, we can sample from the distribution $p_\theta(\rho | \mathcal{C})$ as follows:
+    <ol>
+      <li>Sample $\rho \sim p_\theta(\cdot)$.</li>
+      <li>If $1(\rho \models \mathcal{C}) == 1$ return $\rho$; else restart from step 1.</li>
+    </ol>
+    This algorithm is very simple, and it works well when the constraint $\mathcal{C}$ is easy to satisfy (ie., when it is likely that we will find a satisfying program $\rho$ in the first few tries).
+    However, it can be very inefficient when the constraint is hard to satisfy, as we may have to sample many times before we find a program that satisfies the constraint.
+    This issue is particularly apparent when we are sampling from a flexible distribution such as that induced by a large language model, where the space of possible programs is very large.
+    </p>
+    To address this, we can try to bias the sampling process towards the programs that are more likely to satisfy the constraint;
+    indeed, one of the strengths of the language modeling paradigm is that it is very simple to turn the constraint into some textual prompt that can be used to condition the model.
+    For example, we could <i>approximate</i> the distribution $p_\theta(\rho | \mathcal{C})$ by encoding $\mathcal{C}$ as a prompt $p_\mathcal{C}$ and sampling from the distribution $p_\theta(\rho ; p_\mathcal{C})$.
+    How good of an approximation this is fundamentally depends on our model's capacity; however, even the best models will be imperfect, and thus we will still need to use some clever sampling strategy.
+
+    <h2>Filtering based on observational equivalence</h2>
+    An interesting early example of a system which went one step beyond rejection sampling is AlphaCode<cite>AlphaCode</cite>.
+    AlphaCode sought to solve problems from programming competitions; at the time, generalist models were not yet very competent programmers, so instead AlphaCode begun by taking a language model which had first been pre-trained on a large set of programs from Github,
+    and then finetuned the model on a dataset of programming competition problems.
+    Despite this specialization, performance was still not very good, so AlphaCode introduced a novel sampling strategy to improve the quality of the solutions.
+    First, a very large number of candidate programs (in its most aggressive mode, 1 million samples per task) were sampled from the model.
+    Then, AlphaCode performed rejection sampling on a set of <i>public</i> unit tests, which were provided as part of the problem description.
+    This turned out to not be enough, however, as many of the sampled programs were still incorrect; when evaluated on the hidden test cases, which were not provided as part of the problem description, many of the programs would fail.
+    As a result, AlphaCode introduced a second filtering step, where it would take the set of programs that passed the public tests and then cluster them based on <a href="Lecture3.htm">observational equivalance</a> on synthetic input data.
+    Finally, only one program from each cluster was returned.
+    Thus, the final output of AlphaCode was a small set of unique programs that passed all the public tests, and which were also distinct from each other in terms of their behavior on the synthetic input data, increasing the chances that at least one of them would pass the hidden tests.
+
+    <h2>Self-repair</h2>
+    As language models became more powerful, it became possible to use them to not just generate continuations of programs, but also to <i>repair</i> programs that were known to be incorrect.
+    This begged the question of whether it was possible to increase the quality of the sampled programs by using the model to iteratively improve them.
+    A simple implementation of this idea is as follows:
+    <ol>
+      <li>Sample a program $\rho \sim p_\theta(\cdot ; p_\mathcal{C})$.</li>
+      <li>If $1(\rho \models \mathcal{C}) == 1$ return $\rho$; else, let $e = \mathcal{C}(\rho)$ be the error of $\rho$ with respect to the constraint $\mathcal{C}$.</li>
+      <li>Sample a repaired program $\rho \sim p_\theta(\cdot ; p_\mathcal{C} ++ \rho ++ e)$.</li>
+      <li>Repeat from Step 2.</li>
+    </ol>
+    This procedure is known as <i>self-repair</i>, <i>self-debugging</i> or <i>self-refinement</i>.
+    The idea here is that if the model is able to leverage the information contained in the error $e$ to repair $\rho$, then we will be able to obtain a program that satisfies the constraint $\mathcal{C}$ with fewer samples.
+    However, work by Olausson et al. showed that the efficacy of this approach depends highly on the model's ability to link the error $e$ to the constraint $\mathcal{C}$, and as of late 2023 only the largest models were able to do this reliably.
+    Furthermore, while we have presented a simplistic version of the algorithm that only considers one initial sample $\rho \sim p_\theta(\cdot ; p_\mathcal{C})$, in practice it was found that it was often more useful to sample multiple candidates $\rho_1, \ldots, \rho_n \sim p_\theta(\cdot ; p_\mathcal{C})$ before attempting repair.
+    <p />
+    The self-repair procedure can be seen as a form of <i>iterative refinement</i>, where we iteratively sample a solution and then refine it based on information we receive from the environment.
+    Nowadays, self-repair has been absorbed by the more general iterative framework employed by so-called <i>LLM agents</i>, where interactions with the environment (and iterating on the solution) play a central role.
+    We will talk more about agents in <a href="Lecture16.htm">Lecture 16</a>.
+
+    <h2>Constrained Decoding</h2>    
+    Sometimes, we may not have any hard constraints on the semantics of the program we want to sample, but we may still want to ensure that the sampled program satisfies some other type of hard constraint.
+    In particular, if we know which programming language we would like the solution to be in, we may as a first step at least want to ensure that the sampled program is syntactically valid in that language.
+    In this special case, we can use a technique called <i>constrained decoding</i> to ensure that the sampled program is syntactically valid.
+    <p />
+    The high-level idea is simple. Let $\mathcal{L}$ be the set of all strings which are valid programs in the target programming language.
+    Note that $\mathcal{L}$ may be infinite, but that is no concern; since we have a grammar for the programming language, it is easy to check whether a given string $s$ belongs to $\mathcal{L}$ by parsing it.
+    Thus, we already have a procedure for checking whether a string is a valid program, and we can use this to filter out invalid programs with rejection sampling.
+    There are two concerns with this approach, however. The first concern is: is this even worth it? In an early paper by a team
+    of Google researchers<cite>Austin21synthesis</cite>, they showed that as models got larger, syntax errors became quite rare. 
+    Moreover, even when there is a syntax error, it is not clear that avoiding the syntax error will lead to a correct program. 
+    When the model makes a syntax error, it is likely because the task is so out of distribution that the model has little idea of 
+    how to solve the problem, so correcting the syntax simply replaces a garbage solution with syntactically valid garbage.
+    It is important to note, however, that this reasoning only applies to programs in high-resource languages (the results in the Google paper were for Python); for low-resource languages, syntax errors can still be more common, and avoiding them can help the model 
+    better leverage knowledge it is able to transfer from high-resource languages.
+    <slide>
+      Sampling:errorBreakdown;
+      Sampling:ConstrainedDecoding1;
+      Sampling:ConstrainedDecoding2;
+      Sampling:ConstrainedDecoding3;
+      Sampling:ConstrainedDecoding4;
+      Sampling:ConstrainedDecoding5;
+      Sampling:ConstrainedDecoding6;
+      Sampling:ConstrainedDecoding7;
+      Sampling:ConstrainedDecoding8;
+      Sampling:ConstrainedDecoding9
+    </slide>
+    <p />
+    The second concern is efficiency. We can of course use rejection sampling to filter out invalid programs, but can we do better?
+    <p />
+    The answer to the first question is yes. Several papers in 2021 and 2022 showed that constrained decoding can improve the quality of the generated programs, especially for low-resource languages. 
+    One of the earliest examples of 
+    using constrained decoding for program synthesis is the work of Scholak et al.<cite>scholak-etal-2021-picard</cite>, which focuses on generating SQL queries from natural language.
+    <p/>
+    Another notable example is the Synchromesh project<cite>poesia2022synchromesh</cite>.
+    By using the <i>prefix closure</i> $\mathcal{L}^c = \{u \mid \exists v. uv \in \mathcal{L}\}$ of $\mathcal{L}$, i.e., the set of all strings that can be extended to a valid program, we can ensure at each step of the sampling process that the sampled string is a valid prefix of a program in $\mathcal{L}$.
+    It is not immediately obvious, but it turns out that answering the question of whether a string $s$ is in $\mathcal{L}^c$ can be done somewhat efficiently; Poesia et al. found that their implementation could ensure syntactically valid programs with only an 8% overhead compared to sampling from the model without any constraints.
+    <p/> 
+    Since Syncomesh, the idea of constrained decoding has been adopted by a number of other systems. The idea has been generalized beyond syntax to richer semantic constraints. For example, Mundler et al. in their work on type-constrained code generation have shown how to incorporate type information into the sampling process<cite>mundler2025typeaware</cite>. They focus on TypeScript, and they show that for synthesis and translation problems, they can reduce compilation errors in the generated code by half, although correctness is only improved by between 3.5 and 5.5%. The picture is better for repair problems, where their approach "enhances functionally correct repair of non-compiling code relatively by 37% on average."
+    <p/>
+    
+    <h2>Unbiased constrained decoding</h2> 
+    A general problem with constrained decoding approaches that locally steer the model away from invalid tokens is that they do not actually sample from the distribution $p_\theta(\cdot | \mathcal{C})$. The issue is illustrated by the figure above. 
+    The problem is that the model may make a bad decision early on, but the bad decision may not lead to a syntax error until much later.
+    By that point, avoiding the syntax error may simply be shifting some of the probability mass from one invalid program to another similar program that is syntactically valid but incorrect. More generally, we see that simply avoiding the syntax errors 
+    is not the same as sampling from the distribution $p_\theta(\cdot | \mathcal{C})$.
+    <p />
+    <slide>
+      Sampling:GAD1;
+      Sampling:GAD2;
+      Sampling:GAD3;
+      Sampling:GAD4;
+      Sampling:GAD5;
+      Sampling:GAD6
+    </slide>
+    This issue was first documented by Park et al in their work on Grammar-aligned decoding<cite>ParkWBPD24</cite>. The key observation
+    behind this work is that it's not enough to simply avoid invalid tokens; in order to get a correct distribution, the probability
+    of valid tokens must also be adjusted. The problem is that these adjustments require foresight about how much probability mass
+    will be lost from the search tree in the future, which is not available when making local decisions.
+    <p/>
+    The solution proposed by Park et al is to build up these adjustments incrementally as one samples repeatedly from the model.
+    This only works if one is trying to sample repeatedly from the model, which is a reasonable assumption in the context of program synthesis. The algorithm is probably not the last word on this problem, as it involves non-trivial overheads and is slow to 
+    converge to the true conditional distribution, but it is likely that we will see the insights from this work being built into 
+    future constrained decoding algorithms.
+    
+    <!--
+    <h2>Steering with Sequential Monte Carlo</h2>
+    One limitation of the style of constrained decoding employed in Synchromesh is that it is quite inflexible.
+    Poesia et al. do present an extension which allows some degree of semantic steering, but its reach is limited and its implementation is quite complex.
+    <p />
+    Recently, a more flexible approach to constrained decoding has been developed by a group of researchers here at MIT, which is based on <a href="Lecture5.htm">Sequential Monte Carlo</a> (SMC).
+    The key idea is that the constraints can be encoded as part of the importance weights of the SMC particles.
+    For example, to replicate the behaviour of Synchromesh, we can simply set the importance weights to be 0 for all particles that do not belong to the prefix closure $\mathcal{L}^c$.
+    What is neat about this approach is that it gives a very flexible framework for constrained decoding, where we can use the importance weights to encode any kind of constraint we want; it gives a sort of algebra through which to compose constraints.
+    <p />
+    Another important benefit of this approach is that it, unlike the type of local steering employed in Synchromesh, actually samples from the distribution $p_\theta(\cdot | \mathcal{C})$.
+    To see why, suppose we are interested in sampling programs that do not use any variable names longer than 10 characters.
+    We could do this in the style of Synchromesh by checking, when sampling the token $t_k \sim p_\theta(t_k | t_1, \ldots, t_{k-1})$, whether adding the token $t_k$ to the current program $t_1 ++ t_2 \ldots ++ t_{k-1}$ would result in the construction of a variable name longer than 10 characters;
+    we would then filter out all such tokens, and only sample from the remaining ones.
+    However, suppose the current program is <code>def check_balance(account_</code>.
+    We would then need to filter out the tokens <code>num</code>, <code>name</code>, <code>number</code>, etc., which would all lead to the argument variable having a name longer than 10 characters.
+    Perhaps we would end up having to settle for a completion like <code>def check_balance(account_1)</code>, which is not very legible; formally speaking,
+    while it does satisfy the constraint, it is not a representative sample from the distribution $p_\theta(\cdot | \mathcal{C})$ because it has low probability under the prior.
+    Beam search, in which we keep track of the $k$ most likely continuations at each step, does alleviate this problem somewhat, but such degenerate samples can still occur with local constraints.
+    <p />
+    In contrast, the SMC approach guarantees that we will obtain representative samples from the distribution $p_\theta(\cdot | \mathcal{C})$, because (in the sample limit) the model will essentially be able to backtrack
+    to the program <code>def check_balance(acc</code> and sample the more legible completion <code>_num)</code> instead.
+-->
+<script>
+processDocument();
+</script>
+
+<div class="footnotes">
+
+<footnotes>
+
+</footnotes>
+
+</div>
+</div>
+
+</body>
+
+
+
+</html>

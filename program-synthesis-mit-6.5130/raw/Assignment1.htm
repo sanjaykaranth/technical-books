@@ -1,0 +1,310 @@
+<html>
+
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Assignment 1</title>
+
+<script type="text/javascript" async
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-MML-AM_CHTML">
+</script>
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}});
+</script>
+<script type="text/javascript" src="library.js"></script>
+<link href="style.css" rel="stylesheet" type="text/css">
+</head>
+
+<body>
+
+
+<div class="header">
+<h1 style="color: rgb(165, 42, 42);">Introduction to Program Synthesis</h1>
+&copy; Armando Solar-Lezama. 2025. All rights reserved.</div>
+
+<div id="navigator" class="sidenav">
+<a href="#about">Lecture 1</a>
+<a href="#services">Lecture 2</a>
+<a href="#clients">Lecture 3</a>
+<a href="#contact">Lecture 4</a>
+</div>
+<script type="text/javascript">
+loadNavBar();
+</script>
+
+<div class="content">
+
+
+<h1>Assignment 1</h1>
+
+
+<b>Submission Instructions</b>
+This assignment is due at 5pm on the date indicated in the
+<a href="index.htm"> class calendar</a>.
+The starter code for the assignment
+can be found <a href="pset1.tar.gz">here</a>.
+In order to submit your code, pack your <code>BottomUpEnumerator.jl</code>, <code>Question2.jl</code>, 
+<code>question3a.js</code>, and <code>question3b.txt</code> files into a tar file and submit through Canvas (we will create a Canvas assignment as the deadline approaches).
+
+<p/>
+
+<b>Collaboration policy</b>
+You are allowed to consult with at most one other student
+while working on the pset, but every student is responsible for
+writing their own code and submitting their own work. If you
+do consult with another student, you should explicitly acknowledge
+them in your submission (you can do that in a comment in <code>BottomUpEnumerator.jl</code>).
+
+<h2>Setup instructions</h2>
+
+First, you should install julia using the instructions <a href="https://julialang.org/downloads/">here</a>.
+
+Then, install the packages you will need for this assignment by running the following commands in the julia REPL:
+
+<codeblock>
+	julia> import Pkg
+	julia> Pkg.add("MLStyle")
+	julia> Pkg.add("Images")
+</codeblock>
+
+After you have done this you should be able to run the internal tests and see that they pass, as such:
+
+<codeblock>
+	$ julia test/runtests.jl internal
+	Test Summary: | Pass Total
+	internal | 1 1
+</codeblock>
+
+If you run into issues, you can alternatively try installing the packages locally into the project environment by launching the julia REPL with <code>julia --project</code> to install the packages with the above instructions, and running the tests with <code>julia --project test/runtests.jl internal</code>
+
+<h2>Problem 1 (40 pts)</h2>
+The goal of this assignment is for you to experiment with some of the bottom up inductive synthesis algorithm discussed in class.
+The code defining the language and interpreter is in the <code>src</code> directory, under <code>Combinata.jl</code> and <code>Interpreter.jl</code>. You should
+only modify the <code>BottomUpEnumerator.jl</code> file; you will submit only this file for Question 1.
+We have defined a simple language for the following expressions:
+<codeblock>
+Coordinate :=
+			| Coordinate(int, int)................// a coordinate in the plane. Coordinates must be between 0 and MAX_COORD
+Shape :=
+			| Rect(Coordinate, Coordinate)........// a rectangle with the given lower left and top right coordinates
+			| Triangle(Coordinate, Coordinate)....// the triangle represented by the bottom right half of the equivalent Rect
+			| Circle(Coordinate, int).............// a circle with the given center and radius. Must have nonzero area
+			| SUnion(Shape, Shape)................// the set-union of two shapes
+			| SIntersection(Shape, Shape).........// the set-intersection of two shapes
+			| Mirror(Shape).......................// the union of a shape with its mirror image across the line y=x
+</codeblock>
+
+As part of the starter code for this project, we have included constructors for all the different AST nodes,
+as well as a basic interpreter <code>interpret()</code> that you can use to evaluate expressions in this language.
+
+Make sure to use <code>make_coord</code>, <code>make_rect</code>, <code>make_triangle</code>, and <code>make_circle</code>
+	rather than calling the constructors directly. These functions will check that the coordinates are valid and throw an error if they are not.
+
+To see examples of how to render shapes for debugging, you can look at the <code>Render.jl</code> file, specifically the
+function <code>render_examples</code>.
+
+<h3>Problem 1a</h3>
+
+As a starter task, implement the function <code>grow</code> in <code>BottomUpEnumerator.jl</code>. This function
+takes a list of shapes and returns a list of shapes containing
+<ul>
+	<li>All the shapes in the input list</li>
+	<li>And all the shapes that can be obtained by applying <code>SUnion</code>, <code>SIntersection</code>, or <code>SMirror</code> once to shapes in the input list</li>
+</ul>
+
+You can test your implementation by running the following command on your command line:
+
+<codeblock>
+	$ julia test/runtests.jl question-1a
+</codeblock>
+
+
+<h3>Problem 1b</h3>
+Your goal is now to implement a new the rest of the bottom up enumeration algorithm.
+
+Specifically, implement <code>elim_equivalents</code>, which takes a list of shapes and returns a list of shapes containing
+all the shapes in the input list, but with all equivalent shapes removed. Two shapes are equivalent if they
+have the same input/output behavior on the given points. The <code>Dict</code> feature in Julia
+will be useful for this task.
+
+<p>Then, implement <code>synthesize</code>, which takes a list of input/output pairs and returns a
+shape that matches the input/output pairs.
+
+<p>You can test your implementation by running the following command on your command line:</p>
+
+<codeblock>
+	$ julia test/runtests.jl question-1b
+</codeblock>
+
+<p>
+	Many of these tests might take several seconds, but not much longer. The entire question-1b suite takes around
+	20-90 seconds on our laptops. If your tests are taking much longer than this (> 5 minutes), you
+	should consider revising your implementation.
+</p>
+
+<p>Hint for the test <code>flipped_triangle</code>: make sure that the Context independent equivalence property holds for your implementation.
+
+
+<h2>Problem 2 (30 pts)</h2>
+
+Consider the following grammar for a problem:
+<codeblock>
+term:= last2Digits(x + ??) || last3Digits(x + ??) || last4Digits(x + ??) || last5Digits(x + ??)
+
+prog:= term ++ term ++ term ++ term
+</codeblock>
+
+For example, the program <code>last2Digits(x + 3) ++ last3Digits(x + 537) ++ last4Digits(x + 82) ++ last5Digits(x + 87)</code>
+	applied to 9928 should return 31465001010015 (31 ++ 465 ++ 0010 ++ 100015).
+
+The question marks ?? indicate unknown constants.
+You should assume the function operates only over the integers.
+Even though the space of potential expression is very large, the search space has a lot of
+structure. Our goal for this problem is to come up with a representation of the search
+space and a search strategy that exploits this structure and allows us to efficiently solve for a program in
+this space given a set of input/output pairs. In particular, the goal is to find a way
+to factor the search so it is possible to solve for the unknowns without having
+to search the exponentially large space.
+<p/>
+
+
+
+
+Your goal is to implement a function with the interface below.
+<codeblock>
+function structured(inputoutputs)
+</codeblock>
+Where <code>inputoutputs</code> is a list of input output pairs (each input/output pair
+represented as a tuple of Int64, String). The function should return an AST for the synthesized
+program using the same format as <code>example_lkd</code>.
+The key requirement is that your function
+should execute in <b>linear time</b> with respect to the size of this input list.
+Your code should be well commented to clearly explain why your algorithm is linear
+time and complete (guaranteed to find a solution if one exists).
+
+Hints:
+<ul>
+<li>If the last 3 digits of (x + y) are z, then the last 3 digits of (z - x) are the last 3 digits of y. </li>
+<li>For a given program, the locations at which the output breaks into terms are fixed.</li>
+<li>A solution that has to iterate through the input list
+a large number of times is still linear time as long as the number
+of passes is bounded by a constant.</li>
+
+</ul>
+
+You can test your implementation by running the following command on your command line:
+
+<codeblock>
+	$ julia test/runtests.jl question-2
+</codeblock>
+
+
+<h2>Problem 3 (30 pts)</h2>
+
+For this problem, you will be working with an implementation of a top-down stochastic synthesis algorithm, and will be applying it to solve symbolic regression problems.
+
+<p>	Start by installing Node.js and npm using the instructions <a href='https://nodejs.org/en/download/'>here</a>. Then, from the <code>question3/js-synth</code> directory, install the dependencies with:</p>
+<codeblock>
+	$ npm install
+</codeblock>
+
+<p>To make sure everything is set up properly, ensure that the following command runs successfully without crashing. It could take up to a minute or so to run, and it's okay if some of the outputs say "INCORRECT".</p>
+<codeblock>
+	$ node performance-eval.js 1
+</codeblock>
+
+Edits since release:
+<ul>
+	<li>If you're using Windows, you may have to do the following: copy <code>package.json</code> from "solution\question3\js-synth\package.json" to "solution\question3\package.json". And in <code>main.js</code> replace the line <code>const __dirname = path.dirname(new URL(import.meta.url).pathname);
+	</code> with <code>const __dirname = path.resolve();</code>.</li>
+	<li>There was a small visual bug where the displayed equation for one problem was slightly different from the function being graphed - this doesn't impact any of the printed results, just the label on one equation. "f(x) = 2 * sin(x) + sin(2 * x) + x" should instead have said "f(x) = 2 * sin(x) + sin(2 * x)"</li>
+</ul>
+
+<h3>Problem 3a</h3>
+
+Define a grammar for a symbolic regression language in the <code>lang</code> variable of <code>question3/question3a.js</code>. 
+Refer to the annotated example grammar in <code>question3/js-synth/languages/simplmaplang.js</code> to understand the format.
+
+Your language should have:
+<ul>
+	<li>Arithmetic operations</li>
+	<li>Trigonometric functions</li>
+	<li>Exponentiation</li>
+	<li>If-then-else conditional operator (with a boolean condition supporting less-than comparisons)</li>
+	<li>Integer constants 0 through 5</li>
+	<li>Input variable <code>x</code> (this will be handled for you by the library)</li>
+</ul>
+
+The functions being synthesized will have type <code>"float->float"</code>, and are listed in <code>problemDefinitions</code> at the top of <code>question3/gen_data.js</code>.
+
+<p>Note: Primitive function implementations should not throw errors, however NaN values are fine and the loss function will assign them the highest possible loss.</p>
+
+<p>You can try out your implementation by running (from <code>question3/</code>)</p>
+<codeblock>node main.js</codeblock>
+
+You can run the starter code in the same way (but it will only synthesize identity, constant, and sin functions).
+
+<p>You can then launch a local server to view the results by running (from <code>question3/</code>)</p>
+<codeblock> python3 -m http.server 8989 </codeblock>
+Once launched, you can leave this process running in a separate terminal, no need to restart it between runs. Open <a href="http://localhost:8989/visualization/synthesis_viewer.html">http://localhost:8989/visualization/synthesis_viewer.html</a> to view the results. You might find that many of the solutions appear much longer than the ground truth solutions - this is expected in the current configuration of the algorithm, which isn't heavily prioritizing shorter programs.</p>
+
+<p>Finally, for a slower more thorough evaluation, you can benchmark your implementation by running</p>
+<codeblock>node main.js benchmark</codeblock>
+Which will run the synthesis algorithm 5 times and print the average results. Note that benchmarking will not update the results in the visualization.
+
+<p>
+<b>Expected performance</b>: Stochastic synthesis algorithms will vary between runs, so we don't expect every run to find an exact solution.
+Additionally, synthesis can get stuck in local optima that prevent finding the exact solution.
+We therefore don't expect your implementation to solve all of the problems exactly, nor to do so every time.
+It should be possible to solve many of the easier problems exactly fairly often, but it is okay to solve the later problems much less frequently - and having an average loss that is below 0.1 (1e-1) for each problem will get full credit.
+</p>
+
+
+For reference, a benchmarking run of our implementation (a fairly general grammar, not particularly specialized to the problems) gave the following results:
+<codeblock>
+f(x) = x: harmonicAvgLoss = 0.00e+0, avgLoss = 0.00e+0, avgCost = 11, fracCorrect = 1
+f(x) = 5 * x + 10: harmonicAvgLoss = 2.25e-34, avgLoss = 9.09e-34, avgCost = 2856.6, fracCorrect = 1
+f(x) = 5 / x^2: harmonicAvgLoss = 0.00e+0, avgLoss = 6.54e-36, avgCost = 8855.2, fracCorrect = 1
+f(x) = (sin(x))^3: harmonicAvgLoss = 5.34e-33, avgLoss = 5.34e-33, avgCost = 1489.8, fracCorrect = 1
+f(x) = if(lt(x, 0), 0, x): harmonicAvgLoss = 0.00e+0, avgLoss = 0.00e+0, avgCost = 1609, fracCorrect = 1
+f(x) = if(lt(x, 0), 3 * x ^ 2, x * sin(x)): harmonicAvgLoss = 2.54e-33, avgLoss = 5.63e-3, avgCost = 49509, fracCorrect = 0.2
+f(x) = 2 * sin(x) + sin(2 * x) + x: harmonicAvgLoss = 0.00e+0, avgLoss = 2.44e-2, avgCost = 49939.8, fracCorrect = 0.2
+f(x) = 4 * x^2 - 5 * x + 4: harmonicAvgLoss = 8.78e-31, avgLoss = 9.51e-3, avgCost = 47907, fracCorrect = 0.2
+f(x) = sin(2 * x^2)/cos(x^2): harmonicAvgLoss = 7.46e-33, avgLoss = 7.46e-33, avgCost = 22754.8, fracCorrect = 1
+f(x) = if(lt(x, 1), (2-x), sin(x)): harmonicAvgLoss = 0.00e+0, avgLoss = 2.69e-3, avgCost = 27667.8, fracCorrect = 0.8
+f(x) = 4 * (sin(x))^3 + x: harmonicAvgLoss = 3.31e-32, avgLoss = 3.53e-3, avgCost = 46899, fracCorrect = 0.2
+</codeblock>
+
+But your results will vary with your choice of grammar. Here avgLoss is the average loss over all runs, avgCost is the average number of synthesis steps taken before a solution was found (if any), and fracCorrect is the fraction of runs that found an exact solution.
+
+<h3>Problem 3b</h3>
+
+Language models can often struggle with the kind of reasoning required for symbolic regression from input-output examples.
+Try prompting a language model of your choice (e.g. ChatGPT) to see if it can solve some of these problems - pick 3 problems of varying difficulty to try.
+<p>
+Write your own prompt, and be sure to provide the grammar along with (some or all of) the input-output examples for the problem (you can find these in <code>problems.json</code>).
+</p>
+Briefly describe the model and prompt you used, and summarize your takeaways from doing this with 3 problems of varying difficulty.
+What can or can't it solve? How does it's reasoning go wrong or right? We will be grading this part based on effort as opposed to outcomes.
+
+Record your answer in <code>question3b.txt</code>.
+
+<script>
+processDocument();
+</script>
+
+<div class="footnotes">
+
+<footnotes>
+
+</footnotes>
+
+</div>
+</div>
+
+</body>
+
+
+
+</html>

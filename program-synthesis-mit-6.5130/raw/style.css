@@ -1,0 +1,377 @@
+@charset "utf-8";
+/* CSS Document */
+
+
+html{	
+	font-size: 18px;	
+} @media only screen and (max-width: 700px) {
+  html {
+    font-size: 14px;
+  }
+}
+
+h1{
+	font-size: 150%;  
+}
+
+h2{
+	font-size: 120%;
+}
+
+h2::before { 
+  display: block; 
+  content: " "; 
+  margin-top: -100px; 
+  height: 100px; 
+  visibility: hidden; 
+  pointer-events: none;
+}
+
+
+table {
+    border-collapse: collapse;
+	border: 1px solid black;
+	background:#A2A0D9
+	text-align: left;
+}
+
+th, td {
+    padding: 10px;
+}
+
+
+li, ul{
+	
+}@media only screen and (max-width: 700px) {
+  li, ul {
+    margin:4px;
+	padding:0px;
+  }
+}
+
+.codeblock {
+	background-color: rgb(240,240,240);
+	color:rgb(60,60,60);
+	margin-left: 60px;
+	margin-right: 60px;
+	margin-top:10px;
+	margin-bottom:10px;
+	padding:10px;
+	white-space: pre-wrap;
+}@media  only screen and (max-width: 700px) {
+  .codeblock{
+    margin-left: 0px;    
+    font-size: 80%;
+    width:550px;
+  }
+}
+
+
+
+
+.aside, .popup{
+	background-color:rgb(220,220,220); 
+	padding: 15px; 
+	float: right; 
+	width:30%;
+	margin-left: 10px;
+}
+
+.popup{
+	border: 3px solid #800000;
+	position: fixed;
+	left: 200px;
+	top: 150px;
+	width:60%;
+}@media  only screen and (max-width: 700px) {
+  .popup{
+    left: 70px;
+  }
+  .popup .codeblock{
+  	width:90%;
+  }
+}
+
+
+.content {
+	margin-left: 160px;
+	margin-top:100px;
+	margin-right:40px;
+	line-height: 1.5;
+	
+}@media  only screen and (max-width: 700px) {
+  .content {
+    margin-left: 55px;
+    margin-right:5px;
+    margin-top:75px;
+  }
+}
+
+
+td, th {
+    border: 1px solid #dddddd;
+    text-align: left;
+    padding: 8px;
+}
+
+.alwaysbig {
+    float: none; 
+	width:100%;	
+  }
+
+.slideview{
+	padding: 0 0px; 
+  margin: 10px;
+	float: right; 
+	width:45%;	
+}@media  only screen and (max-width: 1000px) {
+  .slideview {
+    float: none; 
+	width:100%;	
+  }
+}
+.expandslide{
+	position:relative; top: 4px;left: 0px;z-index: 1;
+}@media  only screen and (max-width: 1000px) {
+  .expandslide {
+     visibility: hidden;
+  }
+}
+
+
+
+
+tr:nth-child(even) {
+    background-color: #dddddd;
+}
+
+.quote{
+	background-color: rgb(240,240,240);
+	color:rgb(60,60,60);
+	margin-left: 60px;
+	margin-right: 60px;
+	margin-top:10px;
+	margin-bottom:10px;
+	padding:10px;
+	
+}@media only screen and (max-width: 700px) {
+  .quote {
+    margin-left: 0px;
+     width:550px;
+  }
+}
+
+.footnotes{
+	font-size: 70%;
+	padding-top: 30px;
+}
+
+
+
+.header {
+    height: 100px;
+    width: 100%;
+    position: fixed;
+    z-index: 2;
+    top: 0;
+    left: 0;
+    background-color: #FFFFFF;
+    overflow-x: hidden;
+    padding-top: 2px;
+    padding-left:16px;
+    font-size: 80%;
+}@media only screen and (max-width: 700px) {
+  .header {
+   height: 70px;
+   padding-top: 0px;
+  }
+}
+
+.header h1{
+	padding: 2px 6px 0px 0px;
+    text-decoration: none;
+    font-size: 180%;
+    color: rgb(165, 42, 42);
+    
+}@media only screen and (max-width: 700px) {
+  .header h1{
+   padding: 0px 6px 0px 0px;
+  }
+}
+
+.sidenav {
+    height: 86%;
+    width: 160px;
+    position: fixed;
+    z-index: 1;
+    top: 100px;
+    left: 0;
+    background-color: #FFFFFF;
+    overflow-x: hidden;
+    padding-top: 0px;
+}@media  only screen and (max-width: 700px) {
+  .sidenav {
+    width: 55px;
+    top: 75px;
+  }
+}
+
+.sidenav {   
+    font-size: 90%;
+}
+
+.sidenav a, .sidelink {
+    padding: 3px 8px 3px 16px;
+    text-decoration: none;
+    font-size: 90%;
+    color: rgb(165, 42, 42);;
+    display: block;
+}@media  only screen and (max-width: 700px) {
+  .sidenav a, .sidelink {
+    padding: 3px 8px 3px 10px;
+  }
+}
+
+.sidenav a:hover {
+    color: rgb(80, 21, 21);;
+}
+
+@font-face {
+    font-family: 'Bitter';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url(https://s3.us-east-2.amazonaws.com/resources.playskript.com/fonts/Bitter-cyrillic-ext.woff2) format('woff2');
+    unicode-range: U+0460-052F, U+1C80-1C88, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+    font-family: 'Bitter';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url(https://s3.us-east-2.amazonaws.com/resources.playskript.com/fonts/Bitter-cyrillic.woff2) format('woff2');
+    unicode-range: U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* vietnamese */
+@font-face {
+    font-family: 'Bitter';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url(https://s3.us-east-2.amazonaws.com/resources.playskript.com/fonts/Bitter-vietnamese.woff2) format('woff2');
+    unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+    font-family: 'Bitter';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url(https://s3.us-east-2.amazonaws.com/resources.playskript.com/fonts/Bitter-latin-ext.woff2) format('woff2');
+    unicode-range: U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+    font-family: 'Bitter';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url(https://s3.us-east-2.amazonaws.com/resources.playskript.com/fonts/Bitter-latin.woff2) format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* latin-ext */
+@font-face {
+    font-family: 'Caladea';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url(https://s3.us-east-2.amazonaws.com/resources.playskript.com/fonts/Caladea-latin-ext.woff2) format('woff2');
+    unicode-range: U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+    font-family: 'Caladea';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url(https://s3.us-east-2.amazonaws.com/resources.playskript.com/fonts/Caladea-latin.woff2) format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* devanagari */
+@font-face {
+    font-family: 'Jaldi';
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url(https://s3.us-east-2.amazonaws.com/resources.playskript.com/fonts/Jaldi-devanagari.woff2) format('woff2');
+    unicode-range: U+0900-097F, U+1CD0-1CF6, U+1CF8-1CF9, U+200C-200D, U+20A8, U+20B9, U+25CC, U+A830-A839, U+A8E0-A8FB;
+}
+/* latin-ext */
+@font-face {
+    font-family: 'Jaldi';
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url(https://s3.us-east-2.amazonaws.com/resources.playskript.com/fonts/Jaldi-latin-ext.woff2) format('woff2');
+    unicode-range: U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+    font-family: 'Jaldi';
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url(https://s3.us-east-2.amazonaws.com/resources.playskript.com/fonts/Jaldi-latin.woff2) format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+
+@font-face {
+    font-family: 'Latin Modern';
+    src: url(https://s3.us-east-2.amazonaws.com/resources.playskript.com/fonts/lmroman10-bold-webfont.woff) format('woff');
+    font-weight: bold;
+    font-style: normal;
+    font-variant: normal;
+}
+
+@font-face {
+    font-family: 'Latin Modern';
+    src: url(https://s3.us-east-2.amazonaws.com/resources.playskript.com/fonts/lmroman10-bolditalic-webfont.woff) format('woff');
+    font-weight: bold;
+    font-style: italic;
+    font-variant: normal;
+}
+
+@font-face {
+    font-family: 'Latin Modern';
+    src: url(https://s3.us-east-2.amazonaws.com/resources.playskript.com/fonts/lmroman10-italic-webfont.woff) format('woff');
+    font-weight: normal;
+    font-style: italic;
+    font-variant: normal;
+}
+
+@font-face {
+    font-family: 'Latin Modern';
+    src: url(https://s3.us-east-2.amazonaws.com/resources.playskript.com/fonts/lmroman10-regular-webfont.woff) format('woff');
+    font-weight: normal;
+    font-style: normal;
+    font-variant: normal;
+}
+
+
+@font-face {
+    font-family: 'mathcal';
+    src: url(https://s3.us-east-2.amazonaws.com/resources.playskript.com/fonts/jsMath-cmsy10.woff2) format('woff2');
+    font-weight: 500;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'mathbb';
+    src: url(https://s3.us-east-2.amazonaws.com/resources.playskript.com/fonts/jsMath-bbold10.woff2) format('woff2');
+    font-weight: bold;
+    font-style: normal;
+    font-display: swap;
+}

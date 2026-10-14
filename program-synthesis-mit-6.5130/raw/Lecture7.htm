@@ -1,0 +1,740 @@
+<html>
+
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Lecture 7</title>
+
+<script type="text/javascript" async
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-MML-AM_CHTML">
+</script>
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}});
+</script>
+<script type="text/javascript" src="library.js"></script>
+<link href="style.css" rel="stylesheet" type="text/css">
+</head>
+
+<body>
+
+
+<div class="header">
+<h1 style="color: rgb(165, 42, 42);">Introduction to Program Synthesis</h1>
+&copy; Armando Solar-Lezama. 2025. All rights reserved.</div>
+
+<div id="navigator" class="sidenav">
+<a href="#about">Lecture 1</a> 
+<a href="#services">Lecture 2</a> 
+<a href="#clients">Lecture 3</a> 
+<a href="#contact">Lecture 4</a>
+</div>
+<script type="text/javascript">
+loadNavBar();
+</script>
+
+<div class="content">
+
+<h1>Lecture 7: Synthesis with constraints</h1>
+
+The techniques described in the previous lecture used symbolic representations of
+the program space, but they still involved a fair amount of enumeration. We now 
+focus on a class of techniques that are "more symbolic", and have more flexibility
+in capturing complex program spaces, although at the expense of a significant computational
+cost. 
+<p/>
+For this lecture and the next, we will be using the Sketch synthesis system 
+as a canonical example<cite>sketchthesis</cite>, although there are other
+systems such as Rosette<cite>TorlakB14</cite>,
+SyGuS solvers such as CVC5<cite>barbosa2022cvc5</cite>, and
+Brahma<cite>Jha:2010</cite> which are based on similar principles. The similarities
+and differences between these different systems will be elaborated at the end of the unit.
+
+<h2>Constraint-based synthesis at a glance</h2>
+
+The high-level idea in constraint-based synthesis is to represent the program space as 
+a parametric program $P[c]$, so that different values of the parameters correspond
+to different programs in the space. The idea is to translate requirements on the behavior
+of the program $P[c]$ into constraints on the parameters $c$, so that any value of $c$ 
+that satisfies the constraints $\varphi(c)$ is guaranteed to lead to a program $P[c]$ satisfying all
+the requirements.  
+<p/>
+In order for this approach to work, we need three ingredients. 
+First, we need a mechanism for creating parametric programs from a high-level
+definition of the program space. Second, we need a mechanism for constructing 
+constraint systems from these parametric programs and their requirements, and finally, 
+we need efficient mechanisms for solving the resulting constraint systems. 
+We start by addressing the first point. 
+
+<h2>From program spaces to parametric programs.</h2>
+There are two major approaches for defining the parametric programs that are 
+the starting point of constraint-based synthesis. The first approach is to
+provide the user with a high-level notation for describing a program 
+space, and then have a compiler that converts this definition into a
+parametric program. This is the approach taken by Brahma or by the SyGuS solvers. 
+In the case of Brahma, the user simply provides a bag of components, and
+the system automatically produces a parametric program where different choices
+of parameters correspond to different ways of connecting the components together. 
+In the case of the SyGuS solvers, the user provides a context-free grammar
+for a space of expressions, and the solver generates a parametric program 
+from this grammar. 
+<p/>
+The alternative approach, implemented in Sketch, 
+is to provide the user with a rich and expressive language for directly writing
+parametric programs. This expressiveness provides the programmer with significant 
+control over the program space and its encoding as a parametric program. That control
+allows an expert user to carefully engineer a program space to maximize the efficiency
+of the synthesis process, but it also introduces an extra level of complexity for 
+less sophisticated users who must deal with the added complexity of defining their
+program space as a parametric program. Sketch tries to alleviate this burden by 
+providing powerful abstraction facilities that allow potentially complex definitions
+of program spaces to be encapsulated and reused across many different programs.   
+
+<h2>Sketch: a language for parametric programs.</h2>
+
+The most authoritative source for the sketch language is the
+<a href="http://people.csail.mit.edu/asolar/manual.pdf">sketch manual</a>.
+In this section, we provide a brief overview of the key principles behind the language. 
+
+At a high-level, sketch is a simple imperative language with support for many 
+of the features we have come to expect from modern languages including heap
+allocated structures, high-order functions and polymorphism (known as generics in Java).
+There are three features, however, that distinguish Sketch from other languages: 
+Unknown constants, harnesses and generator functions. 
+<p/>
+<b>Unknown constants.</b> An unknown constant in Sketch is expressed as $??$. 
+The type of this constant is inferred from context; it can be an integer, 
+a boolean, a character or a fixed size array of either. At synthesis time, sketch
+replaces each unknown constant with a fixed constant so that all the 
+requirements are satisfied. For example, the simplest sketch program    
+that illustrates the main ideas in the language is shown below.
+<codeblock>
+int doublevalue(int in){
+	int t = in * ??;
+	assert t == in + in;
+	return t;
+}
+</codeblock>
+In the program, the unknown constant must be replaced with an integer constant. 
+The assertion imposes the requirement that <code>t==in+in</code>, which clearly
+forces the unknown constant to resolve to the number 2. The assertion, however,
+is only valid in the context of a <i>test harness</i>. 
+<p/>
+<b>Test harnesses.</b> A test harness is simply a function that when invoked
+must not trigger any assertion violations. For example, in order to force
+the <code>doublevalue</code> function above to synthesize to the correct function, 
+we can use the following test harness. 
+<codeblock>
+harness void test1(){
+        doublevalue(5);
+        doublevalue(7);
+        doublevalue(3);
+}
+</codeblock>
+We could have also excluded the <code>assert</code> inside the <code>doublevalue</code> function
+itself and instead placed the assertion in the test harness. 
+<codeblock>
+harness void test1(){
+        assert doublevalue(5) == 10;
+        assert doublevalue(7) == 14;
+        assert doublevalue(3) == 6;
+}
+</codeblock>
+Since we are focusing on the inductive synthesis case, we will focus on the case where
+the test harness does not take any inputs, and instead just invokes the desired functions
+using fixed values. Later in the course we will explore more general test harnesses that
+can impose constraints that must hold for all inputs. 
+
+<p/>
+<slide>
+Lecture7:Slide5;
+Lecture7:Slide6
+</slide>
+<b>Generator function.</b> At this point, we already have a language expressive enough 
+to discover some interesting aspects of a program. For example, if a program
+involves an affine expression, say over a variable <code>x</code>, but we do not want to have to think about the
+constants involved, we can just express it as <code>x*??+??</code>. Or, for example, 
+if at some point we are not sure whether we should use variable <code>x</code> or variable
+<code>y</code>, we can use <code>?? ? x : y</code>, using the <code>?:</code> ternary operator
+like the one available in C. In order to support the description of more general program
+spaces, we need some additional machinery, which we borrow from the generative programming literature. 
+In particular, Sketch uses the notion of a <i>generator</i>, which looks like a function, 
+but with the property that it will get fully inlined and partially evaluated into 
+its calling context. 
+
+
+As a simple example directly from the Sketch manual, consider the problem of specifying the set of linear functions of two 
+parameters <code>x</code> and <code>y</code>. 
+That space of functions can be described with the following simple 
+generator function:
+<codeblock>
+generator int legen(int i, int j){
+   return ??*i + ??*j + ??;
+}
+</codeblock>
+
+
+The generator function can be used anywhere in the code in the same way a function would, but the 
+semantics of generators are different from functions. In particular, every call to the generator 
+will be replaced by a concrete piece of code in the space of code fragments defined by the 
+generator. Different calls to the generator function can produce different code fragments. For 
+example, consider the following use of the generator.
+
+<codeblock>
+harness void main(int x, int y){
+
+  assert legen(x, y) == 2*x + 3;
+  assert legen(x,y) == 3*x + 2*y;
+
+}
+</codeblock>
+
+
+Calling the solver on the above code produces the following output
+<codeblock>
+void _main (int x, int y){
+  assert ((((2 * x) + (0 * y)) + 3) == ((2 * x) + 3));
+  assert (((3 * x) + (2 * y)) == ((3 * x) + (2 * y)));
+}
+</codeblock>
+Note that each invocation of the generator function was replaced by a concrete code fragment 
+in the space of code fragments defined by the generator. 
+<p/>
+<slide>
+Lecture7:Slide9;
+Lecture7:Slide11
+</slide>
+Up to this point, though, the generator may seem like a typesafe macro, little more
+than syntactic sugar. What gives generators their real power is the ability to 
+be recursive. For example, the generator in the figure, describes a grammar of 
+expressions, which can either be a variable <code>x</code>, 
+an unknown bit-vector constant, or the bitwise combination or bitwise negation of recursively 
+generated expressions. Each recursive invocation of the generator can have its own distinct
+values for the unknown constants. This idiom of using generators to define a 
+space of programs as a context free grammar is quite common 
+across many different applications of Sketch. 
+<p/> 
+
+In addition to being recursive, generators can also be high-order, 
+meaning that they can take other functions or even other generators as parameters. 
+An example of this is the <code>rep</code> generator also shown in the figure. 
+This generator takes as a parameter a function or a generator <code>f</code>, and
+applies it $n$ times.
+<codeblock>
+generator void rep(int n, fun f){
+    if(n>0){
+        f();
+        rep(n-1, f);
+    }    
+}
+</codeblock>
+This very simple generator actually implements a very important
+computational pattern, one where a particular kind of operation needs to be performed
+multiple times, but each time may actually correspond to a distinct operation. 
+
+For example, consider the code below:
+<codeblock>
+bit[32] reverseSketch(bit[32] in) {
+    bit[32]  t = in;    
+    int s = 1;
+    generator void tmp(){
+        bit[32] m = ??;
+        t = ((t << s) & m )| ((t >> s) & (~m));
+        s = s*??;
+    }
+    rep(??, tmp);
+    return t;
+}
+</codeblock> 
+The goal of the sketch above is to reverse the bits in a 32-bit word through
+a combination of shifts and masks. 
+The generator <code>tmp</code> reflects the basic computational pattern 
+for each step, where the word is shifted left and right by some amount, 
+and a mask determines which bits to keep from the left shift and which
+from the right shift. After that, the shift amount is multiplied by a constant. 
+We know the computation involves some number of such operations, but not how 
+many. The generator <code>rep</code> is ideally suited for that purpose. 
+Note that the first parameter <code>n</code>, which defines
+the depth of the recursion, does not have to be a 
+constant; the number of iterations is part of what the synthesizer needs to discover.
+
+The result of solving this sketch against a suitable harness would look something like this:
+<codeblock>
+void reverseSketch (bit[32] in, ref bit[32] _out)  implements reverse/*reverse.sk:7*/
+{
+  bit[32] __sa0 = {0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1};
+  _out = ((in << 1) & __sa0) | ((in >> 1) & (~(__sa0)));
+  bit[32] __sa0_0 = {0,0,1,1,0,0,1,1,0,0,1,1,0,0,1,1,0,0,1,1,0,0,1,1,0,0,1,1,0,0,1,1};
+  _out = ((_out << 2) & __sa0_0) | ((_out >> 2) & (~(__sa0_0)));
+  bit[32] __sa0_1 = {0,0,0,0,1,1,1,1,0,0,0,0,1,1,1,1,0,0,0,0,1,1,1,1,0,0,0,0,1,1,1,1};
+  _out = ((_out << 4) & __sa0_1) | ((_out >> 4) & (~(__sa0_1)));
+  bit[32] __sa0_2 = {0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1};
+  _out = ((_out << 8) & __sa0_2) | ((_out >> 8) & (~(__sa0_2)));
+  bit[32] __sa0_3 = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
+  _out = ((_out << 16) & __sa0_3) | ((_out >> 16) & (~(__sa0_3)));
+  return;
+}
+</codeblock>
+An important thing to note in the generated code is that much of the control 
+structure in the generator has completely disappeared. All the branches
+and all the recursive calls have been partially evaluated away, so what is left is
+just the code the user actually wants, albeit with somewhat ugly variable names. 
+
+
+<h2>Formalizing generator functions.</h2>
+<slide>
+Lecture7:Slide16;
+Lecture7:Slide17;
+Lecture7:Slide20;
+Lecture7:Slide21
+</slide>
+The first step in understanding how constraints are produced from a program written in Sketch
+is to state more precisely the semantics of generators. This will
+be done following the formalization in a 2013 journal paper on Sketch<cite>Solar-Lezama13</cite>. 
+As mentioned before, Sketch is really just a notation for writing parametric programs. 
+A program in Sketch can be thought of as a parametric function, parameterized by a function
+$\phi$. This function $\phi$ is really just a table that tells us the value of each of the 
+different constants inside a Sketch.
+<p/>
+If it were not for recursive generators, it would be straightforward to simply assign a unique
+name to each distinct unknown constant in the sketch, and then make $\phi$ just a
+mapping from that name to a corresponding value as illustrated in the figure. However, 
+recursive generators introduce a wrinkle into this story because the same syntactic
+instance of a hole is supposed to have different values for different instances of the
+generator. We formalize this by making $\phi$ a function of a <i>context</i> in addition 
+to a hole. 
+<p/>
+The idea is that when you write a sketch with generators, the compiler internally
+assigns each callsite for a generator a unique code. When a generator is called, 
+it is assigned a calling context which summarizes where the generator
+was called. This context is then passed to $\phi$ as illustrated in the figure. 
+Note that when a generator is called from another generator, the new callsite
+name is appended to the existing context, but when it is called from a function, 
+there is no prior context to consider, and only the callsite name is used. 
+Also, if a hole is used outside of a generator, just within a normal 
+function, then it will just have the empty context.
+<p/>
+The result, as illustrated in the last frame in the figure, 
+is that a sketch with recursive generators can have a potentially unbounded
+set of values. In practice, Sketch avoids this by bounding the depth of recursion 
+for generators, a bound that is defined by a command-line flag "<code>--bnd-inline-amnt</code>". 
+With a bound on the depth of recursion $\phi$ becomes once again just a table, mapping
+a finite set of  
+hole names and a calling contexts to values. Over the next lecture, then, 
+we focus on the process of generating constraints on $\phi$, and solving them 
+in order to find values that allow the sketch to satisfy all its assertions.
+
+
+<h2>From sketch to constraints</h2>
+Before we jump into the details of how to generate constraints from a Sketch, we need to understand something about how
+to define the semantics of a simple language. There are many different formalisms for doing this, but a very popular
+one in the context of imperative language is to define the semantics of an expression as a function from a state to
+a value. Specifically, the <i>denotational semantics</i> for expressions is a function 
+\[
+\newcommand{\esem}{\mathcal{A}}
+\esem[\![ \cdot ]\!] : Expr \rightarrow \Sigma \rightarrow Val
+\]
+Where $\Sigma$ is just the set of possible states for a program. In other words, for a given expression, say $x + 5$, 
+$\esem[\![ x+5 ]\!] $ will give us a function that given a state containing values for each variable, 
+will give us back a value, hopefully corresponding to the value of x in the state plus five.
+<p/>
+Similarly, the semantics of a statement (also often called command in the literature) 
+are represented as a function that maps the state of a program to a new 
+state. Specifically, the denotational semantics for a statement is a function
+\[
+\newcommand{\csem}{\mathcal{C}}
+\csem[\![ \cdot ]\!] : cmd \rightarrow \Sigma \rightarrow \Sigma
+\]
+
+<slide>
+Lecture8:Slide5;
+Lecture8:Slide6;
+Lecture8:Slide7
+</slide> 
+For example, the figure illustrates the semantics for a very simple imperative language. Note 
+that the semantics are described recursively following the syntactic structure of the language. 
+For example, the semantics of constants are just the value of the constant, and the semantics for 
+variables are defined in terms of the state, which assigns a value to every variable. For simplicity,
+the language elides the distinction between booleans and integers, just using 1 as a stand-in for true.
+<p/>
+For commands, the semantics are also defined recursively. The most interesting rule is the 
+rule for assignment of the form <code>x:=expr</code>, which produces a new state that is just like the
+state before the assignment, but with $x$ now mapped to a new value corresponding to the result of 
+evaluating $expr$ on the initial state. Sequential composition is just what one would expect, the semantics
+is just the result of chaining together the semantics of the two corresponding statements. 
+The rule for <code>if</code> is interesting notationwise. To understand the notation, remember that a state
+is a mapping from variable names to values. So the if rule produces a new mapping that will return either
+the values created by the <i>then</i> branch, or the values created by the <i>else</i> branch
+depending on whether the condition evaluated to true or not.
+<p/>
+Loops are interesting because they necessarily involve recursion. The recursion stops only when we 
+reach a state where the loop condition evaluates to false.
+
+
+<p/>
+<h2>Symbolic execution of a sketch</h2>
+<slide>
+Lecture8:Slide8;
+Lecture8:Slide9;
+Lecture8:Slide10</slide>
+The basic idea when creating constraints from a sketch is that we want to perform 
+<i>symbolic execution</i>. Unlike the standard execution which runs a program and produces 
+states mapping variables to values, our symbolic execution will run a program and produce
+<i>symbolic</i> values and <i>constraints</i>. 
+<p/>
+The formalism is similar from before, but for expressions, the semantics are now a function that
+takes in a state mapping variable names to symbolic values and producing symbolic values, which 
+are really just symbolic representations of a function from an assignment to holes $\phi$ to 
+a concrete value. An important thing to note is that the denotation function is parametric on 
+the context $\tau$, which is important in correctly generating constraints for generators. 
+<p/>
+For example, the figure shows the semantics of a few basic expressions. The most interesting 
+is the semantics for a hole with a unique label $??_i$. Just like we saw before, given an
+ assignment $\phi$, the value of the hole is simply whatever $\phi$ assigns to that
+ hole under the current context. 
+ <p/>
+ More interesting still are the semantics of commands. Unlike before, two things happen when 
+ we evaluate a command. First, the state may change, as variables are assigned new values. 
+ But also, the set of valid assignments may be restricted, for example, by an assertion. 
+ So the semantics of a command take in a state and a representation of a set of valid
+ assignments and produces a new state and a new set of valid assignments.
+ For example, after an assignment statement, the set of valid assignments remains unchanged, 
+ but the state is updated with the assigned variable now mapping to a new symbolic value. 
+ When an assert is executed, on the other hand, the state remains unchanged, but the
+ set of valid assignments is now restricted to only those assignments that cause the expression 
+ to evaluate to true under the current state.
+ 
+ <p/>
+  
+ <slide>
+Lecture8:Slide11;
+Lecture8:Slide12;
+Lecture8:Slide13;
+Lecture8:Slide14;
+Lecture8:Slide15;
+Lecture8:Slide16
+</slide>
+The semantics of branches and loops are a little more involved. In the case of branches, each branch
+is evaluated on the set of values that satisfy the branch, and the results of the two branches are
+combined at the end as illustrated by the animation. The state is also modified by the branch in 
+the same way as it was in the case of the simple imperative language.
+<p/>
+Loops follow the same logic, but with the caveat that loop evaluation is recursive. This is problematic
+because unlike the standard execution where we could stop the recursion as soon as we got a state
+where the condition evaluated to true, in this case we are doing symbolic execution, so even if 
+we wanted to we would not be able to tell when the expression evaluates to true. Note that the 
+definition does not even guard the recursion by a conditional. In principle, we could compute the
+expression to the right recursively until we reach a fixpoint, that is, sooner or later, 
+additional recursive calls to $W$ will stop contributing anything to the resulting set, and at that point 
+we can stop recursing. In practice, Sketch simply continues this process until we reach a hard-coded limit 
+determined by a compile-time flag "<code>--bnd-unroll-amnt</code>". 
+
+
+<h2>Representing Sets and Symbolic Expressions</h2>
+<slide>
+Lecture8:Slide17
+</slide>
+The symbolic execution defined earlier relies on our ability to compactly represent both the 
+symbolic values $\Psi$ and the set of viable candidates $\Phi$. For the symbolic values, 
+the representation is simply as an AST with unknowns at the leaves. For the set $\Phi$, we 
+represent them as predicates. The idea of representing sets as predicates is very common 
+in many different areas of program analysis and synthesis. The idea is to represent
+a set $\Phi$ as a predicate $P_\Phi(\phi)$ such that $P_\Phi(\phi) \mbox{ iff } \phi\in \Phi$. 
+Thus, for example, the predicate $true$ corresponds to the universal set, and the
+standard operations of Union and intersection correspond to and and or of the corresponding
+predicates respectively.
+
+<p/>
+From the semantics, for example, we see that assert restricts the set to those $\phi$ for which
+the expression is true. This means that if we initially had a set represented by 
+a predicate $P_\Phi(\phi)$, then after the assert, the set would be represented
+by the new predicate 
+\[ 
+P_\Phi(\phi) \wedge f(\phi)=1 \mbox{ where } f(\phi) = \esem[\![ e ]\!] ^\tau \sigma \phi
+\]  
+
+Similarly, the union in the semantics of <code>if</code> would be represented as
+\[ 
+P_{\Phi_1}(\phi) \vee P_{\Phi_2}(\phi) 
+\]
+The figure above provides an example of the representation of the set of valid examples 
+for a given sketch. The nodes labeled as <code>mux</code> simply select from their
+two inputs based on whether a condition is true or false. The <code>and</code> joins
+together the constraints from the two asserts, each of which involves an <code>or</code>
+because the asserts are guarded by <code>if</code> conditions.
+Another point to note is that the representation is not quite a tree, but a DAG.
+This is simply an optimization to exploit sharing in the underlying expression. 
+
+<h2>Optimizing the representation</h2>
+<slide>
+Lecture8:Slide46;
+Lecture8:Slide47;
+Lecture8:Slide48;
+Lecture8:Slide48;
+Lecture8:Slide49;
+Lecture8:Slide50;
+Lecture8:Slide51;
+Lecture8:Slide52;
+Lecture8:Slide53;
+Lecture8:Slide54;
+Lecture8:Slide55;
+Lecture8:Slide56;
+Lecture8:Slide57;
+Lecture8:Slide58;
+Lecture8:Slide59;
+Lecture8:Slide60;
+Lecture8:Slide61
+</slide>
+There are two major optimizations that are used to reduce the size of the
+representation: structural hashing and algebraic simplification. 
+Structural hashing is illustrated by the animation. The idea is simply to identify
+common sub-expressions and represent them with the same node. Because
+the representation is a DAG, it is sufficient to traverse it from the leaves down
+to the root node in one pass. For every node we record its type and the ID of its parents. 
+If two nodes of the same type share the same parents, they get merged into a single node.
+<p/>
+Structural hashing is most powerful when combined with algebraic simplification. This involves
+rewriting the DAG based on algebraic equalities. Each rewrite simplifies the representation, but
+also potentially helps uncover additional shared structure as illustrated in the figure. 
+The current Sketch solver release has a hand-crafted simplifier, although in recent work, 
+we have explored the automatic synthesis of the simplification layer<cite>Rohit0002S16</cite>. 
+
+The workhorse for solving constraints is the SAT solver, 
+which is able to take a boolean formula expressed in Conjunctive
+Normal Form (CNF) and either generate a satisfying assignment 
+or prove that the constraints are unsatisfiable, i.e. that they
+have no solution. Over the rest of this section, 
+we describe how the constraints from the previous lecture 
+are translated into boolean constraints in CNF form, and how
+the SAT solver is able to solve them. 
+
+<h2>From high-level constraints to CNF</h2>
+<slide>
+Lecture9:Slide5
+</slide>
+In the boolean satisfiability literature, a 
+<i>Literal</i> is either a variable or its negation. 
+A <i>Clause</i> is a disjunction (or) of literals. 
+A formula is said to be in Conjunctive Normal Form 
+if it consists of a conjunction (and) of clauses. 
+
+The CNF representation has a number of advantages. 
+A particularly important one is that we can turn an
+arbitrary boolean formula into CNF format in polynomial
+time. This is unlike Disjunctive Normal Form (DNF) 
+which may require exponential time to generate. 
+<p/>
+The basic approach for generating a CNF formula 
+from an arbitrary boolean formula is illustrated
+by the figure. The approach is based on the observation
+that a formula of the form $\wedge_i l_i \Rightarrow l_j$ 
+is trivially converted into a CNF formula. 
+Given a boolean formula represented as a DAG, it is easy 
+to define for each node a set of implications that 
+relate the values of the input to the values 
+of the output. For example, given a node of the
+form $t1 = h_0 \wedge h_1$, we can write out the
+set of implications that define the relationship
+between $t1$, $h_0$ and $h_1$, namely, 
+\[
+\begin{array}{ccc}
+h_0 \wedge h_1 \Rightarrow t_1 & \equiv & \bar{h_0} \vee \bar{h_1} \vee t_1\\
+t_1 \Rightarrow h_0 & \equiv & \bar{t_1} \vee h_0\\
+t_1 \Rightarrow h_1 & \equiv & \bar{t_1} \vee h_1
+\end{array}
+\]
+
+In addition to Booleans, though, Sketch supports Integers, Floating point values,
+bit-vectors, arrays and recursive datatypes.
+Most of these types are supported through <i>one-hot</i> encodings. 
+
+<h2 id="onehot">One-hot encoding in Sketch</h2>
+<slide>
+Lecture9:Slide10
+</slide>
+A One-hot encoding is essentially a unary encoding. 
+The basic idea is to have a separate indicator variable
+for each possible value of a variable that indicates what the true value 
+is. For example, the figure illustrates a one-hot encoding where 
+two variables, each with three possible values are added together. 
+Each value is represented as a list of value, indicator variable pairs. 
+The result contains all possible values that can result from adding the original
+two numbers, and the new indicator variables are now boolean combinations 
+of the indicator variables in the original values. 
+
+<p/>
+
+By default, every integer in sketch is represented using this one-hot encoding, 
+and when using the "<code>--fe-fpencoding TO_BACKEND</code>" flag, even 
+floating point values are stored using this encoding as well. 
+By default, even arrays are represented using this encoding. 
+Every entry in the array having one bit for every possible value 
+for that entry. Recursive data-types are also represented
+using this kind of encoding; the details are beyond the scope
+of this lecture, but can be found on a recent paper by 
+Inala et al<cite>InalaPQLS17</cite>. 
+
+
+<p/>
+There are a number of advantages to this encoding, particularly 
+its simplicity and flexibility. Most importantly, the encoding 
+can also be extremely efficient in allowing the SAT solver to propagate
+information about the possible values of a variable. 
+The major downside of this encoding is that it is very space inefficient. 
+As the number of possible values for a variable grows, so does the 
+number of bits required to represent it. This can be particularly problematic
+for sketches that are heavy in arithmetic. 
+For those sketches, sketch provides an alternative solver
+that does not rely on one-hot encodings, and which can be enabled
+with the flag "<code>--slv-nativeints</code>".
+
+<h2 id="sat">Solving SAT problems</h2>
+<slide>
+Lecture9:Slide12;
+Lecture9:Slide13;
+Lecture9:Slide14;
+Lecture9:Slide15;
+Lecture9:Slide16;
+Lecture9:Slide17;
+Lecture9:Slide18;
+Lecture9:Slide19;
+Lecture9:Slide20;
+Lecture9:Slide21;
+Lecture9:Slide22;
+Lecture9:Slide23;
+Lecture9:Slide24;
+Lecture9:Slide25;
+Lecture9:Slide26;
+Lecture9:Slide27
+</slide>
+ 
+
+Modern SAT solvers are based on the DPLL algorithm named 
+after Martin Davis, George Logemann, Donald Loveland and Hilary Putnam. 
+The algorithm performs a backtracking search over
+the space of possible assignments to a boolean formula, 
+but the key idea of the algorithm is that every time it makes a choice
+for the value of a variable, it propagates the logical implications of
+that assignment. The process is illustrated in the figure. After
+the variable $x_1$ is set, the clause $\bar{x_1} \vee x_7$ 
+forces the value of $x_7$ to be true through <i>unit propagation</i>.
+As the assignment of variables and propagation of logical consequences
+continues, eventually one of two things happen, either the solver
+assignes values to all the variables and terminates, or it runs
+into a contradiction as illustrated in the figure where the 
+assignment of false to $x_9$ implies that $x_4$ is both true 
+and false according to different clauses.
+
+<p/>
+
+Modern SAT solvers improve on this basic algorithm in three important 
+ways. The first one, also illustrated in the figure is <i>conflict analysis</i>.
+Every time the solver arrives at a contradiction, it traces back to identify
+a small set of assignments that led to that contradiction. In the case 
+of the example, we can lay the blame of the conflict on the assignment
+to $x_1$, $x_5$, and $\bar{x_9}$. This explanation for the conflict is 
+summarized in a <i>conflict clause</i> that prevents that bad assignment from 
+appearing again. The conflict clause is not unique; for example, 
+$\bar{x_7} \vee \bar{x_5} \vee x_9$ would also be an acceptable conflict, because 
+as we can see from the figure, an assignment with $x_7, x_5$ and $\bar{x_9}$
+would also lead to the same contradiction we observed.
+<p/>
+More formally, every time we observe a conflict, we can define a 
+<i>conflict graph</i> where each node $N$ corresponds to a variable, 
+and there is a directed edge $(n_1, n_2)$ connecting two nodes iff 
+the clause that forced $n_2$ to be set to a value includes 
+variable $n_1$. It is not hard to see that this conflict graph will
+be a DAG. The source nodes will be the variables that were chosen arbitrarily,
+and the inner nodes correspond to the assignments that were implied by those
+arbitrary assignments. Every time a contradiction is reached, the conflict
+graph can tell us what the possible conflict clauses are. Specifically, 
+any set of nodes in the graph that separates the decision variables 
+(the sources in the DAG) from the conflict will make a valid conflict clause.
+Thus, in the example, the conflict graph tells us that another valid
+conflict clause would be $\bar{x_6} \vee x_3 \vee x_9$.
+This process of learning conflict clauses is termed
+<i>Conflict Driven Clause Learning</i> (CDCL) and 
+was first proposed by Marques Silva and Sakallah in their
+seminal paper on the GRASP SAT Solver<cite>SilvaS96</cite>.
+<p/>
+
+The second important improvement over the basic algorithm 
+in addition to CDCL is called <i>two literal watching</i>, 
+which was first developed by Moskewicz, Madigan, Zhao, 
+Zhang and Malik in the Chaff SAT solver<cite>MoskewiczMZZM01</cite>.
+The key observation behind two-literal watching is that
+while in principle, every time we set the value of a variable
+we have to visit all the clauses that include that variable, 
+in practice, the only cases where a clause actually leads 
+to some action is when we set the second to last literal. 
+At that point, if all other literals have been set to false, 
+and this second to last literal is also set to false, then 
+the last remaining literal must be set to true for the clause
+to be satisfied, and we get unit propagation. 
+So unit propagation will only happen when we set the 
+second to last variable. So the idea is for every clause, 
+we keep track of two literals that haven't been set. 
+As long as there are two literals that have not been set, 
+setting other literals in the clause will have no effect, 
+so there is no need to do anything. Only when one of the 
+two unwatched literals is set, then we check one of three
+possibilities: (a) maybe some of the other literals
+we were not watching was already set to true, in which
+case the clause is already satisfied and there is nothing
+else to do; (b) maybe there are other literals that have not
+been set, in which case we just switch the literals
+we currently watch so that we are again watching to unassigned
+literals, or (c) these two literals are the last
+unassigned literals and all others have been set to false, 
+in which case we do unit propagation. By watching only 
+two literals at a time, the solver saves an enormous 
+amount of memory trafic by only having to visit a small
+fraction of the clauses every time an variable is assigned.
+
+<p/>
+
+Finally, the third important optimization in a modern
+SAT solver involves being careful (but not too careful) 
+in picking which variables to assign next. The point
+about not being too careful is actually important. The 
+most popular heuristic is Variable State Independent Decaying Sum
+(VSIDS), which is very simple, but also very fast, so even
+though it is not too sophisticated, because it is very fast,
+it allows us to search more efficiently overall. 
+The basic idea in VSIDS is to keep a score for every 
+variable that is additively bumped based on how much that
+variable is used, for example in conflict clauses, 
+and then it is exponentially decayed over time. 
+
+<p/>
+Overall, the combination of clever heuristics and 
+careful engineering allows modern SAT solvers to solve
+synthesis problems with millions of variables and clauses.
+Later in the course we will discuss SMT solvers, which 
+are built on top of SAT solvers and provide additional 
+expressive power that is particularly important for 
+dealing with verification problems. 
+
+  
+
+
+
+
+<script>
+processDocument();
+</script>
+
+<div class="footnotes">
+
+<footnotes>
+
+</footnotes>
+
+</div>
+</div>
+
+</body>
+
+
+
+</html>

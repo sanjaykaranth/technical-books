@@ -1,0 +1,188 @@
+<html>
+
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Lecture 14</title>
+
+<script type="text/javascript" async
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-MML-AM_CHTML">
+</script>
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}});
+</script>
+<script type="text/javascript" src="library.js"></script>
+<link href="style.css" rel="stylesheet" type="text/css">
+</head>
+
+<body>
+
+<div class="header">
+<h1 style="color: rgb(165, 42, 42);">Introduction to Program Synthesis</h1>
+&copy; Theo X. Olausson, 2025. All rights reserved.</div>
+
+<div id="navigator" class="sidenav">
+
+</div>
+<script type="text/javascript">
+loadNavBar();
+</script>
+
+<div class="content">
+
+<h1>Lecture 14: Program Synthesis and Evolutionary Search <a href="https://code.playskript.com/view.html?id=6db51358b71968558a99ea33d4dcec9850e468731ae4365d38">(Slides)</a></h1>
+In the past few lectures, we focused primarily on the language models themselves, how to train them, and how to draw samples from them.
+Despite our best efforts, though, the models may not be very good at solving the specific tasks we care about.
+For the next couple of lectures, we will now be exploring different approaches that leverage test-time compute to build solutions 
+over multiple invokations of a model.
+<p/>
+For this lecture, we focus on the use of evolutionary search in combination with language models to synthesize programs that optimize
+some real-valued objective function. The objective may be a true quantitative objective, for example, if our program is a game-playing agent, we might want to maximize the score it achieves in the game.
+But it may also be a smoothed version of a discrete objective; for example, by giving the algorithm partial credit for incorrect solutions that are "close" to the correct solution.
+<p />
+As two examples of this, we will look at Google DeepMind's recent FunSearch and AlphaEvolve projects, which were able to synthesize algorithms that exceeded the best previously known algorithms for important problems such as matrix multiplication and bin-packing.
+
+<h2>A bit of context on Evolutionary algorithms</h2>
+Evolutionary algorithms first became popular in the 1970s after the publication of John Holland's influential book <i>Adaptation in Natural and Artificial Systems</i><cite>holland1975adaptation</cite>. The book introduced the concept of genetic algorithms as a way to solve
+challenging optimization problems by mimicking the process of natural selection. The idea is to maintain a population of candidate solutions which are evolved through a process of reproduction and selection based on their fitness scores.
+<p/>
+<slide>
+  Evolutionary:evolution1;
+  Evolutionary:evolution2
+</slide> 
+The key elements of the evolutionary approach are as follows. First, we need to represent each candidate solution as a <i>genome</i>, 
+typically a string of attributes that define the solution. The algorithm will maintain a <i>population</i> of such genomes 
+that will be evolved over time. Each genome is subject to <i>mutation</i> and <i>crossover</i> operations, which introduce variability into the population. Mutation involves randomly changing parts of a genome, while crossover (also called recombination) involves combining parts of two genomes to create a new one.
+<p/>
+At every step of the algorithm, it evaluates each candidate solution using a <i>fitness function</i>, which assigns a score to each genome based on how well it solves the problem at hand. The algorithm then selects the fittest candidates to form the next generation of the population, while discarding the less fit ones. Each element of the population also undergoes mutation, and surviving candidates are 
+crossed over with each other to create new candidates and replenish the population to its original level.
+<p/>
+A particular kind of evolutionary algorithm is <i>genetic programming</i>, where the genomes represent computer programs. In this case, the mutation and crossover operations are designed to modify the structure of the programs, for example by changing or swapping subtrees in their abstract syntax trees (ASTs). Before the emergence of the modern program synthesis field in the early 2000s, genetic programming was the best known approach to automatic program synthesis.
+<p/>
+After significant interest during the 1980s and 1990s, evolutionary algorithms fell out of fashion for some time. 
+Like many other approaches popular during the AI boom of the 1980s, evolutionary algorithms suffered from significant overclaiming 
+in the early days, which inevitably led to disappointment. After their heyday, they were frequently looked down upon by the mainstream machine learning community. Their shortcomings are many. Their main 
+selling point was their generality; they could be applied to any problem whether discrete or continuous, structured or unstructured. But in practice, they rarely worked well without extensive manual effort in the design of the representation, mutation and crossover operators, and fitness function. Unlike some of the sampling-based optimization algorithms we saw in <a href="Lecture15.htm">Lecture 15</a>, evolutionary algorithms did not have a strong theoretical foundation that could be used to guide their design.
+And even when they worked, the solutions could be defficient in other ways. For example, genetic programming often produced 
+'Frankenprograms' that combined bits and pieces of different programs in ways that were inefficient, difficult to understand, 
+and that may not generalize well beyond the training data.
+<p/>
+So why are we talking about evolutionary algorithms now? Despite their limitations, evolutionary algorithms remain a powerful and flexible optimization technique, and recent work has shown that they can be combined with large-language models to reduce some of their shortcomings and produce impressive results.
+
+<h2>FunSearch</h2>
+<slide>
+  Evolutionary:funsearch1;
+  Evolutionary:funsearch2;
+  Evolutionary:funsearch3;
+  Evolutionary:funsearch4;
+  Evolutionary:funsearch5;
+  Evolutionary:funsearch6;
+</slide>
+Back in 2023, Google DeepMind presented a paper that made a startling claim: "a scientific discovery&mdash; a new piece of verifiable knowledge about a notorious scientific problem&mdash;using an LLM"<cite>DeepMind2023MathDiscoveries</cite>.
+Specifically, the paper claimed to have discovered a new lower bound for the size of <a href="https://en.wikipedia.org/wiki/Cap_set">cap sets</a> in $\mathbb{Z}_3^n$, a problem in combinatorics where the existing lower bounds had stood for 20 years. The specific claim to mathematical significance is controversial, but the approach they used has proven to be quite useful as a program synthesis technique.
+<p />
+The paper presented an algorithm called FunSearch, which combines evolutionary search with large language models to synthesize programs that optimize a given objective function. The key idea is to use a pre-trained language model in place of the traditional mutation and crossover operators. The algorithm also used an LLM to generate the initial population of candidate solutions. 
+<p/>
+Traditional evolutionary algorithms rely on handcrafted mutation and crossover operators, but they are simply hard to design well. They have the dual goal of introducing enough variability into the population so that the algorithm can get good coverage of the search space, but also have a certain amount of locality so they allow for gradual improvement of candidates over time. Moreover, they can introduce
+unnatural artifacts into the candidates, from dead code to roundabout ways of implementing simple operations. 
+<p/>
+In contrast, by using a large language model to generate mutations and crossovers, FunSearch is able to leverage the knowledge encoded in the model to produce more natural and effective variations of the candidates. This is done by simply providing the LLM with a collection of existing candidates and asking it to generate a candidate that improves on the given examples by combining elements of all of them.   
+The LLM is able to generate code that is syntactically correct and in-distribution for the given domain. In addition to the examples, 
+the LLM is also given the score of each solution, allowing the LLM to take this information into consideration when deciding how 
+to craft a new solution. 
+<p/>
+This approach is more flexible than traditional handcrafted operators. For example, it is easy to generalize the crossover operation to combine more than two candidates at a time, simply by providing more examples to the LLM. It is also possible to condition the LLM with 
+additional constraints. For example, in the paper they use a sketch of the solution to constrain the search space to programs that fit the sketch.
+<p/>
+The paper also uses a version of evolutionary search called <i>island evolutionary algorithm</i>, where multiple populations (islands) are evolved in parallel, with occasional migration of candidates between islands. This approach helps to improve diversity in the population and prevents premature convergence to suboptimal solutions.
+<p/>
+<slide>
+  Evolutionary:funsearch7;
+  Evolutionary:funsearch8;
+  Evolutionary:funsearch9;
+  Evolutionary:funsearch10
+</slide>
+The graph in the figure comes from the original paper and it shows the contribution of the different elements of the algorithm 
+to the performance. We can see that the use of multiple parents in the crossover operation actually has a relatively small 
+benefit compared with using only one parent (i.e., mutation only). The use of sketches, on the other hand, has a significant impact on performance. The use of islands also has a small but noticeable benefit. But all the variants of the algorithm significantly 
+improve over the baseline of using only the LLM to generate candidates without any evolutionary search.
+
+<h2>FunSearch for data augmentation</h2>
+While the original FunSearch paper focused on synthesizing mathematical algorithms, the same approach can be applied to other domains as well, and not just for directly synthesizing a desired function.
+For example, in <a href="Lecture12.htm#vlmaterial">a previous lecture, </a> we discussed the VLMaterial project in which 
+we fine tuned a model to generate code to generate procedural textures for 3D models. One of the main challenges in that 
+project was the lack of high-quality training data. The FunSearch approach was used to synthesize new texture generation programs from 
+an initial population of existing programs. 
+<p/>
+In this approach, the fitness function was a measure of program quality that considered the information content of the generated 
+textures. The idea was to encourage the synthesis of programs that generated textures with high information content; the goal 
+was to avoid programs that generated an interesting texture only to clobber it by, for example, reducing the contrast to zero, 
+or overlaying a solid color on top of it. By optimizing for programs that generated high-information-content textures, the algorithm was able to synthesize new texture generation programs that produced a diverse range of interesting textures.
+<p/>
+The FunSearch approach was well suited for data generation because it was able to leverage the knowledge encoded in the LLM to generate new programs that were syntactically correct and in-distribution for the domain, while still generating a good amount of diversity in 
+the population. Using this approach, we were able to expand an initial set of about 1600 programs up to over half a million, 
+enough to successfully fine tune a model to generate new texture generation programs.
+
+
+<h2>AlphaEvolve</h2>
+Very recently, FunSearch was followed up by the AlphaEvolve project<cite>Novikov2025AlphaEvolve</cite>.
+There are two key tecnical differences between FunSearch and AlphaEvolve.
+First, AlphaEvolve mutates entire program files, rather than just single functions, as was done in FunSearch.
+This allows for more complex and modular solutions to be synthesized, at the cost of significantly increased computational requirements.
+The second change is that AlphaEvolve introduced a meta-prompting strategy, where the model also independently searched for and generated
+<i>instructions</i> for how to solve the problem, not just the solutions themselves.
+These instructions are then stored and sampled from the database, just like the solutions.
+<p />
+Behind the scenes, AlphaEvolve also benefitted from other advances made in language modeling since FunSearch.
+In particular, the language model itself was much larger and more powerful.
+From an engineering perspecetive, the authors also built a significant amount of infrastructure to support
+arbitrary fitness functions (such as, for example, training and evaluating a neural network!), which allowed
+them to apply the techniques from FunSearch to a much wider range of problems.
+<p />
+The keystone result of AlphaEvolve was that it was able to synthesize a new algorithm for 4x4 matrix multiplication that outperformed the previously best-known algorithm at the time,
+reducing the number of operations required to multiply two 4x4 matrices from 48 to 49&mdash; the previous best-known algorithm
+had been discovered in 1969.
+<p />
+While FunSearch may have been a proof of concept that large-scale program synthesis could be used to discover new algorithms,
+DeepMind have signaled that AlphaEvolve is already being applied across several domains of Google to improve real-world systems.
+An early version of AlphaEvolve has already been used to improve the performance of Google's data center scheduling,
+recovering 0.7% more stranded resources than could previously be done, by discovering
+a new scoring function that is used to match jobs to resources in a way that is tailored
+to Google's computing workloads.
+The resulting scoring function is remarkably simple:
+<codeblock>
+def alpha_evolve_score(required, free):
+    cpu_residual = required.cpu / free.cpu
+    memory_residual = required.memory / free.memory
+    return -1.0 * (cpu_residual + memory_residual
+                   + mem_residual / cpu_residual
+                   + cpu_residual / mem_residual)
+</codeblock>
+Fitting such scoring functions in an automated data-driven way has been done before with reinforcement learning,
+but that resulted in black-box scoring functions that were difficult to debug, and frightening to deploy in production.
+By contrast, treating it a synthesis problem allowed the authors to discover a simple, human-readable scoring function that is significantly easier to trust with real-world resources.
+<p/>
+This is an example of the power of combining optimization and search strategies with large language models. In the next 
+lecture, we will explore this further in the context of agents that combine LLM calls with other code to solve complex tasks.
+
+
+
+<script>
+processDocument();
+</script>
+
+<div class="footnotes">
+
+<footnotes>
+
+</footnotes>
+
+</div>
+</div>
+
+</body>
+
+
+
+</html>

@@ -1,0 +1,365 @@
+<html>
+
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Lecture 20</title>
+
+<script type="text/javascript" async
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-MML-AM_CHTML">
+</script>
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}});
+</script>
+<script type="text/javascript" src="library.js"></script>
+<link href="style.css" rel="stylesheet" type="text/css">
+</head>
+
+<body>
+
+
+<div class="header">
+<h1 style="color: rgb(165, 42, 42);">Introduction to Program Synthesis</h1>
+&copy; Armando Solar-Lezama. 2018. All rights reserved.</div>
+
+<div id="navigator" class="sidenav">
+
+</div>
+<script type="text/javascript">
+loadNavBar();
+</script>
+
+<div class="content">
+
+<h1>Lecture 20: Introduction to SMT and SyGuS</h1>
+
+The constraint-based verification techniques studied so far relied on our ability to establish the validity of logical formulas that not 
+only include boolean structure, but also integer constraints. Moreover, as we attempt to use those techniques to reason about more complex programs, 
+we need to reason about logical formulas that also include arrays, strings, as well as other recursive data-structures. 
+Part of the popularity of constraint-based verification and synthesis techniques stems from the fact that in recent years, a class of solvers called 
+Satisfiability Modulo Theory Solvers (SMT solvers for short) has become increasingly powerful and able to establish the satisfiability or unsatisfiability
+of logical formulas that include these combinations of constraints.  
+
+<h2>One Theory with simple boolean structure</h2>
+A theory in this context corresponds to a series of axioms that give meaning to a series of predicates and functions. 
+An algorithm for deciding whether a formula in a given theory is valid is called a <i>decision procedure</i>. 
+The goal in 
+Satisfiability Modulo Theories is to either find satisfying assignments or prove the unsatisfiability of a formula in first order
+logic that includes predicates and functions in a theory. For example, consider the language of formulas shown below: 
+\[
+\begin{array}{lcl}
+\mbox{Goals } & G:= &  L ~|~ true ~|~ G_1 \wedge G_2 ~|~ H \Rightarrow G ~|~ \forall x. G \\
+\mbox{Hypotheses} & H:= & L ~|~ true ~|~ H_1 \wedge H_2 \\
+\mbox{Literals} & L := & p(E_1, \ldots, E_k) \\
+\mbox{Expressions} & E := & x ~|~ f(E_1, \ldots E_m) \\ 
+\end{array}
+\]
+<slide>
+Lecture14:Slide5
+</slide>
+The literals and expressions in the language are defined in terms of the predicates and functions in the theory. The goal is to 
+determine whether a formula is valid for all values of $x$ in a given domain. The figure shows what it means for a formula in this 
+theory to be valid. Most of the definitions are straightforward. The last one basically says that a predicate is valid if it 
+evaluates to true according to the semantics of the predicate defined by the theory. 
+<p/>
+Now, suppose we want to prove that a formula holds. We can define a procedure $Prove(G) := Prove(true, G)$, where
+$Prove(H, G)$ decides whether goal $G$ can be proved under hypothesis $H$. 
+The procedure can be defined recursively as follows: 
+\[
+\begin{array}{ll}
+Prove(H, true) & = true \\
+Prove(H, G_1 \wedge G_2) & = Prove(H, G_1 ) \wedge Prove(H, G_2) \\
+Prove(H, H_1 \Rightarrow G) & = Prove(H \wedge H_1 , G) \\
+Prove(H, \forall x. G) & = Prove(H, G[a/x]) \mbox{where } a \mbox{ is a fresh variable}\\
+\end{array}
+\]
+
+How about $Prove(H, L)$? In this case, we have to prove a predicate in the theory assuming a conjunction of other predicates in the theory. 
+\[
+\begin{array}{c}
+\forall x. (L_0 \wedge \ldots L_k \Rightarrow L) \\
+\mbox{or equivalently}\\
+\neg(\exists x. L_0 \wedge \ldots L_k \wedge \neg L)
+\end{array}
+\]
+In other words, $Prove(H, L) = UNSAT(H\wedge \neg L)$. So what this means is that proving the validity of any formula in the language of Goals above 
+reduces to proving unsatisfiability of conjunctions of predicates in the theory. 
+How to do that, depends on the specifics of the theory in question. 
+We now discuss a few popular theories.
+
+<h2>Linear integer arithmetic</h2>
+<slide>
+Lecture14:Slide9;
+Lecture14:Slide10;
+Lecture14:Slide11;
+Lecture14:Slide12;
+Lecture14:Slide13;
+Lecture14:Slide15
+</slide>
+Consider the case where the domain $D$ corresponds to the integers, and the only function available is sum (multiplication by a constant is just a shorthand 
+for repeated sum). The predicates are $>$, $>=$, $=$ and $\neq$. In this case, a conjunction of predicates in the theory 
+corresponds to a system of linear equalities and inequalities over the integers, and there are many well known algorithms to solve such systems.
+<p/>
+As the figure shows, the verification condition we generated for the example in <a href="Lecture12.htm">Lecture 12</a> can be solved 
+with the $Prove$ procedure using only the theory of linear arithmetic. Resolving the verification condition reduces to 
+proving the unsatisfiability of a series of conjunctions of linear inequalities. 
+<p/>
+
+More generally, we can see that with a slight modification to the rule for <code>if</code> relative to the one shown in <a href="Lecture12.htm">Lecture 12</a>, 
+any verification condition can be proven with $Prove$ as long as the invariants and postconditions are conjunctions of literals in the theory of 
+integer linear arithmetic. 
+
+<h2>Equality with uninterpreted functions.</h2>
+<slide>
+Lecture14:Slide16;
+Lecture14:Slide17;
+Lecture14:Slide18;
+Lecture14:Slide19;
+Lecture14:Slide20;
+Lecture14:Slide21;
+Lecture14:Slide22
+</slide>
+Another widely used theory is the theory of equality with uninterpreted functions. We already talked about uninterpreted functions 
+in  <a href="Lecture13.htm">Lecture 13</a>. This theory is often refered as the <i>empty theory</i> because it does not impose
+any additional semantics on the function symbols and the only available predicate is the equality predicate.
+The equality relation is defined by the standard axioms of reflexivity, commutativity and transitivity, and there is an 
+additional axiom of <i>congruence</i> which states that if the inputs to a function are equal, then its output is 
+equal as well. The figure illustrates the basic idea of the decision procedure for this theory; the basic idea is to
+keep track of all the equivalence classes of values and propagate equalities based on both transitivity and congruence. 
+If at any point, one of the equalities contradicts an inequality, the formula is clearly unsatisfiable. If we manage to 
+get the closure of all the transitivities and closures without reaching a contradiction, then the formula is satisfiable. 
+
+<h2>Nelson-Oppen</h2>
+So at this point, we know how to solve formulas that involve a single theory and a simple boolean structure. 
+What happens now if we have a formula that combines multiple theories? 
+For example, consider the formula $f(x+y) \neq f(g(u)+g(v)) \wedge g(u)=y\wedge g(v)=x$. 
+<slide>
+Lecture14:Slide23
+</slide>
+<p/>
+In 1979, Greg Nelson and Derek Oppen developed a technique for combining decision procedures for different theories
+that under certain conditions yields a sound and complete algorithm to solve problems like the one above<cite>NelsonO79</cite>. 
+Before Nelson-Oppen, there had been some work on decision procedures for particular combinations of theories; in fact, Shostak 
+published an efficient decision procedure for linear integer arithmetic and uninterpreted functions<cite>Shostak:1979</cite>
+only months before Nelson and Oppen. But the Nelson-Oppen procedure is quite general and easy to understand, so it will 
+be the focus of this section.
+
+<p/>
+The high-level idea for the algorithm is illustrated by the figure. The first step in the algorithm is called
+Purification, and it involves breaking apart a formula into a conjunction of formulas from individual
+theories by introducing additional variables. The idea is that for each theory $T_j$ we want a formula $\phi_j$
+such that the conjunction of all the $\phi_j$s is equisatisfiable with the original formula $\phi$.
+To do this, we can start by assigning each  $p(E_1, \ldots, E_n)$ to the formula for the theory $T_i$ to which $p$ belongs.
+Then, for every literal $p(E_1, \ldots, E_n)$ if $p$ belongs to some theory $T_i$ and $E_k$ belongs to a different theory $T_j$, 
+then we need to replace $f_k$ in $p$ with a fresh variable $w$ and add a constraint $w=E_k$ to the formula $\phi_j$ for theory $T_j$. 
+Similarly, for every expression $E(f_1, \ldots, f_n)$,  if $E$ belongs to some theory $T_i$ and $f_k$ belongs to a different theory $T_j$, 
+then we need to replace $f_k$ in $E$ with a fresh variable $w$ and add a constraint $w=f_k$ to the formula $\phi_j$ for theory $T_j$. 
+This process is illustrated in the figure for the case of the running example.
+<slide>
+Lecture14:Slide25;
+Lecture14:Slide26;
+Lecture14:Slide27;
+Lecture14:Slide28;
+Lecture14:Slide29
+</slide> 
+<p/>
+The second step in the Nelson-Oppen algorithm is <i>equality propagation</i>. This is an iterative process that alternates between two phases:
+<ul>
+<li>
+Run the UNSAT procedure for each formula $\phi_i$ independently; if any returns UNSAT we are done as the whole formula is clearly unsat. 
+</li>
+<li>
+Broadcast any equalities among shared variables that were discovered as part of the process. 
+If no new equalities were discovered, return SAT. If additional equalities were discovered, repeat the process starting from the previous step.
+</li>
+</ul> 
+<p/>
+So the process will keep running until either one of the theory solvers returns UNSAT, or 
+no new equalities are discovered.
+This procedure is clearly sound; when one of the decision procedures says UNSAT, the problem is clearly unsatisfiable. 
+In general, the procedure is only complete (meaning it always says UNSAT when required) under a <i>convexity condition</i>.
+<p/>
+<slide>
+Lecture14:Slide31;
+Lecture14:Slide34
+</slide>
+A theory is convex if for every A theory is convex if for every conjunctive formula $F$, 
+\[
+\begin{array}{c}
+F \Rightarrow \wedge_i x_i = y_i \\
+\mbox{implies} \\
+\exists i. F \Rightarrow x_i = y_i \\
+\end{array}
+\]
+To illustrate what this means, consider the problem from the figure. The subproblems from both formulas are both satisfiable, 
+and there are clearly no equalities to propagate, yet it is clear that the combination of both is unsatisfiable. 
+The problem is that the theory on the left (Theory E) is not convex. The formula on the left clearly implies that 
+$(x=1) \vee (x=2)$, but it does not imply either of those equalities individually. Therefore, there is no single equality
+that can be propagated.
+<p/>
+A way to avoid this problem is to introduce backtracking search. For example, as the figure illustrates, in the case of the
+example, both possibilities ($x=1$ or $x=2$) lead to unsatisfiability, which allows us to conclude that the problem
+is unsatisfiable. 
+
+<h2>General SMT and DPLL(T)</h2>
+For problems with more arbitrary boolean structure, it is essential to be able to leverage the power
+of modern SAT solvers discussed in <a href="Lecture9.htm#sat">Lecture 9</a>. There are two general 
+approaches for leveraging SAT in the context of these problems: the <i>eager</i> approach and the <i>lazy</i> 
+approach. To understand both of these approaches, we first need to introduce the concept of a 
+<i>boolean abstraction</i> of a SAT problem. A boolean abstraction of a formula $F$ is a boolean formula
+$B_F$ such that $UNSAT(B_F) \Rightarrow UNSAT(F)$.
+<p/>
+As an example, consider the following formula:
+\[
+\begin{array}{cl}
+~ & f(x) \neq f(y) \\
+\wedge & x = a \vee x = b \\
+\wedge & y = a \vee y = b \\
+\wedge & a = b
+\end{array}
+\]
+One way to construct a boolean abstraction of a formula like this is to take all the predicates in the theory
+and replace them with boolean variables. For example, in the example above we can replace each predicate with a variable, for example, 
+$t_1 \equiv f(x) = f(y)$. The result is the boolean abstraction below; this is also referred sometimes as the <i>boolean skeleton</i> of the formula.
+Clearly, if the boolean skeleton is unsatisfiable, then the formula itself would also be unsatisfiable.
+\[
+\begin{array}{cl}
+~ & \neg t_1 \\
+\wedge & t_2 \vee t_3 \\
+\wedge & t_4 \vee t_5 \\
+\wedge & t_6
+\end{array}
+\]
+<p/>
+In the Eager approach to SMT, the goal is to construct a boolean abstraction that is equisatisfiable with the 
+original formula, i.e.  $UNSAT(F) \Rightarrow UNSAT(B_F)$. 
+One way to do this is to explicitly generate boolean constraints corresponding to all the axioms in the theory. 
+For example, in the example above, we can introduce an extra variable $t_8 \equiv x=y$. Then, 
+we can add constraints corresponding to all the axioms from the theory of uninterpreted functions. 
+For example, from congruence, we get that $t_8 \Rightarrow t_1$, and from transitivity 
+we get all the following implications: 
+\[
+\begin{array}{ccc}
+t_2 \wedge t_4 \Rightarrow t_8 & ~ & t_3 \wedge t_5 \Rightarrow t_8 \\
+t_2 \wedge t_6 \Rightarrow t_3 & ~ & t_4 \wedge t_6 \Rightarrow t_5 \\
+t_3 \wedge t_6 \Rightarrow t_2 & ~ & t_5 \wedge t_6 \Rightarrow t_4 \\
+\end{array}
+\]
+We can define a boolean abstraction by adding these additional constraints to the boolean skeleton, and the
+resulting formula will now be unsatisfiable like the original constraint. 
+<p/>
+<slide>
+Lecture14:Slide37
+</slide>
+This approach can be quite effective for some theories, such as the theory of bit-vectors, but in general, 
+the main problem with this approach is that the number of boolean constraints we need to add to fully
+represent the theory may be prohibitively large. Instead, the idea behind the $lazy$ approach is to 
+have a theory solver interact with the SAT solver to incrementally add constraints to the boolean abstraction. 
+The DPLL(T) approach is a framework for structuring this kind of interaction between the SAT solver and 
+the theory solver<cite>GanzingerHNOT04</cite>.
+<p/>
+The high-level idea is that the SAT solver starts with the boolean skeleton of the problem and
+proposes assignments to all the variables. The Theory solver then tries to solve a problem that
+is consistent with these assignments. If it succeeds, then the problem is satisfiable and 
+we are done. If it fails, on the other hand, the theory solver must now generate a conflict clause
+that summarizes why that assignment did not work, and that clause can then be added to the SAT problem
+to force the SAT solver to produce a new assignment. 
+<p/>
+For the running example, suppose the SAT solver produces the following assignment 
+$[t_1 = F, t_2=T, t_3=F, t_4=T, t_5=F, t_6=T]$. The theory solver could immediately 
+see that this assignment is not consistent with the theory, so in principle, it could 
+return a conflict clause of the form $t_1 \wedge \bar{t_2} \wedge t_3 \wedge \bar{t_4} \wedge t_5 \wedge \bar{t_6}$
+to ensure such a bad assignment never appears again. Eventually, after many attempts, the SAT
+solver will have accumulated enough constraints to prove that the problem is unsatisfiable. 
+<p/>
+In order for this process to be efficient, we need two things. First, it is important for the theory 
+solver to be able to check unsatisfiability as the SAT solver makes assignments, rather than 
+having to wait until all the assignments have been made. For example, for the assignment above, 
+by the time the SAT solver sets $[t_1 = F, t_2=T, t_3=F, t_4=T]$, the theory solver
+can prove unsatisfiability, without having to wait for $t_5$ or $t_6$ to be set. So it is important
+for the theory solver to be able to check satisfiability incrementally as the SAT solver makes assignments. 
+Moreover, even after the aforementioned assignment, the theory solver should be able to prove
+that actually, the assignments to $t_1, t_2$ and $t_4$ are enough to prove unsatisfiability, so we want it 
+to produce a conflict clause $t_1 \wedge \bar{t_2} \wedge \bar{t_4}$ that reflects this knowledge. 
+Such a compact conflict clause will help the SAT solver prove unsatisfiability much faster than the original 
+one with six literals.
+
+
+
+<h2>From SMT-LIB to SyGuS</h2>
+
+Back in 2003, the community of researchers working on SMT solvers got together to 
+create a standard input format that would allow different research groups to develop 
+solvers against a common interface. The result of this effort was the 
+<a href="https://smtlib.cs.uiowa.edu/">SMT-LIB</a> standard, which is supported by 
+all major SMT solvers. SMT-LIB defines a syntax to describe SMT problems, and it defines 
+    a standarized set of theories that a solver can support. 
+
+    <p/>
+
+In 2013, the program synthesis community got together to propose an extension to the 
+SMT-LIB standard to support the specification of synthesis problems. The result was the 
+    <a href="https://sygus.org">SyGuS</a> standard<cite>AlurBJMRSSSTU13</cite>. 
+
+The idea behind SyGuS is to allow the user to describe a grammar for a set of unknown 
+    functions and then add constraints in SMT-LIB that specify the behavioral constraints
+    on the synthesized functions. For example, consider the SyGuS problem below (copied from the 2.0 
+    language standard): 
+
+
+    <codeblock>
+        ( set-logic LIA )
+        ( synth-fun f (( x Int ) ( y Int )) Int
+            ( ( I Int ) ( Ic Int ) )
+            ( ( I Int (0 1 x y
+                        (+ I I )
+                        (* Ic I ))
+              )
+              ( Ic Int (0 1 2 ( - 1) ( - 2)) )
+            )
+        )
+        ( declare-var x Int )
+        ( declare-var y Int )
+        ( constraint (= ( f x y ) (* 2 (+ x y ))))
+        ( check-synth )
+    </codeblock>
+
+    The first line, <code>(set-logic LIA )</code> specifies that this code uses 
+    the theory of linear integer arithmetic (LIA). After that comes a definition for a function 
+    f to be synthesized. This function takes two integer arguments and must be generated from a grammar
+    with two non-terminals, <code>I</code> and <code>Ic</code>. Both produce Integer expressions. 
+    <code>Ic</code> must be one of the constants <code>0, 1, 2, -1, -2</code>, whereas <code>I</code> can be a constant 
+    <code>0, 1</code>, one of the input variables <code>x, y</code>, a sum of two <code>I</code>s, 
+    or the product of an <code>Ic</code> times an <code>I</code>.
+    <p/>
+    The <code>(declare-var )</code> declarations specify universally quantified variables, so the 
+    constraint specifies that $f(x,y)$ should equal $2*(x+y)$. 
+
+    Because SyGuS solvers are fully integrated with SMT solvers, they can provide strong guarantees
+    over the results they generate (unlike sketch which is limited to bounded guarantees). 
+    If you are looking for a state-of-the-art SMT solver with SyGuS support, your best bet in 2022 is 
+        <a href="https://cvc5.github.io/">CVC5</a>, led by Clark Barrett and Cesare Tinelli. It has 
+    good support for a number of theories, and incorporates state-of-the-art synthesis algorithms. 
+
+
+ 
+
+<script>
+processDocument();
+</script>
+
+<div class="footnotes">
+
+<footnotes>
+
+</footnotes>
+
+</div>
+</div>
+
+</body>
+
+
+
+</html>

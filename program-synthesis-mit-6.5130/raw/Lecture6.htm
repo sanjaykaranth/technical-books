@@ -1,0 +1,512 @@
+<html>
+
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Lecture 6</title>
+
+<script type="text/javascript" async
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-MML-AM_CHTML">
+</script>
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}});
+</script>
+<script type="text/javascript" src="library.js"></script>
+<link href="style.css" rel="stylesheet" type="text/css">
+</head>
+
+<body>
+
+
+<div class="header">
+<h1 style="color: rgb(165, 42, 42);">Introduction to Program Synthesis</h1>
+&copy; Armando Solar-Lezama. 2025. All rights reserved.</div>
+
+<div id="navigator" class="sidenav">
+<a href="#about">Lecture 1</a> 
+<a href="#services">Lecture 2</a> 
+<a href="#clients">Lecture 3</a> 
+<a href="#contact">Lecture 4</a>
+</div>
+<script type="text/javascript">
+loadNavBar();
+</script>
+
+<div class="content">
+
+
+<h1>Lecture 6: Version Space Algebras from SMARTedit to FlashFill.</h1>
+
+Up to this point, we have been exploring a series of enumerative search techniques; 
+what made these techniques enumerative was that we were explicitly 
+constructing ASTs one-by-one in the process of exploring the space.
+
+For the rest of this unit, we will be switching gears to a different class 
+of search techniques based on <i>symbolic</i> representations of program spaces. 
+The key idea behind these techniques is that instead of enumerating 
+ASTs one-by-one we have some data-structures (or symbols) that 
+concisely represent entire sets of programs. By manipulating these
+symbols, we can efficiently eliminate large sets of possible programs. 
+
+<p/>
+<slide>
+Lecture6:Slide3;
+Lecture6:Slide4;
+Lecture6:Slide5;
+Lecture6:Slide6
+</slide>
+
+It is worth emphasizing that the distinction between enumerative and
+symbolic search techniques is not as crisp as it may appear at first sight. 
+In fact, while we have been focusing so far on enumerative techniques, 
+the reader may have noted that some of the techniques we 
+have covered contain already some symbolic aspects. 
+The basic bottom-up search and the stochastic search strategies were
+very clearly enumerative. Both techniques construct and evaluate
+complete ASTs one at a time before accepting or rejecting them.
+However, the Hierarchical bottom-up techniques and the top-down search
+do have some symbolic aspects to them. In the hierarchical search we 
+described in <a href="Lecture3.htm#hierarchical">Lecture 3</a>, we were performing
+enumeration over a language of queries with holes, where each 
+query with a hole actually represented an entire space of queries.
+Similarly, in the top-down search, each query with an un-expanded 
+non-terminal actually represented the whole set of possible expansions. 
+<p/>
+
+In this lecture, we will be covering a class of techniques 
+that also sit close to the boundary, but which rely heavily 
+on the ability to compactly represent very large sets of programs
+and to manipulate those representations in order to get a concrete program.
+
+<h2>Version Spaces</h2> 
+<slide>
+Lecture6:Slide9
+</slide>
+We start the lecture with a discussion of the Version Space approach to inductive synthesis
+as described by Lau, Wolfman, Domingos, Weld on their paper on programming by demonstration 
+<cite>Lau2003</cite>. 
+In this paper, the space of programs is called a <i>Hypothesis Space</i> ($H$), 
+and given a dataset of inputs and outputs $D=\{(in_i, out_i)\}$, 
+a <i>Version Space</i> $VS_{H,D}$ is the subset of $H$ corresponding to programs that satisfy the
+examples in the given dataset.
+<p/>
+A <i>Version Space Algebra</i> (VSA) defines a set of operations that allow us to manipulate
+and compose version spaces. What really characterizes the VSA-based approaches is the use
+of compact symbolic representations for the version spaces, which allow us to manipulate them
+efficiently.    
+ 
+<h2>Lattice-based version spaces</h2>
+One important class of representations are <a href="https://en.wikipedia.org/wiki/Lattice_(order)" target="_blank">Lattice</a>-based representations. 
+At a high-level, a lattice is a partially ordered set where we can define a unique least upper bound (lub) and a greatest lower bound (glb) for any pair of elements $x$ and $y$, 
+where a least upper bound is the smallest element that is greater than or equal to $x$ and $y$ and the greatest lower
+bound is the largest element that is less than or equal to $x$ and $y$. 
+For example, the integers form a lattice, where $lub(x,y) = max(x,y)$ and $glb(x,y)=min(x,y)$. 
+Another example of a lattice is the set of all predicates over some set of variables $p(x)$. We can define 
+a partial order over this set by saying that $p \leq q \mbox{ iff } p \Rightarrow q$. 
+Then, given two predicates $p$ and $q$, we can see that $lub(p, q) = p \vee q$ and $glb(p,q) = p \wedge q$.  
+
+<p/>
+Now, one common way of defining a range of integers is by its endpoints, so we can use the notation
+$[a, b]$ to represent the set of integers $\{x | a \leq x \leq b\}$, assuming that $a \leq b$. 
+It turns out the same idea can apply to other lattices; given two elements $p, q \in H$ belonging 
+to some lattice $H$, if $p \leq q$, then we can define the set $[p, q] = \{x \in H | p \leq x \mbox{ and } x \leq q \} $.
+In the version space literature, it is said that a version space is <i>Boundary Set Representable</i> if 
+the hypothesis space is a lattice and the version space can be represented
+as a range in terms of its two endpoints $[S, G]$. The letter $S$ is used to refer to the most specific hypothesis, and the
+letter $G$ to the most general. 
+This idea of using endpoints in a lattice to represent a set of concepts goes back to 
+Mitchell's seminal paper on version spaces back in 1982<cite>Mitchell82</cite>.
+
+<p/>
+<b>Example: </b> An example from Lau et al. is a class of functions <code>FindSuffix(T)</code>. This 
+class of functions is parameterized by a string $T$, and is used in the text editing domain to move 
+the cursor right before the next occurrence of the string $T$.
+
+Now, consider the following piece of text from Churchill's famous speech. 
+<p class="quote">
+<quote>
+We shall go on to the end. We  
+<span style="font-weight: bold; color:rgb(200,0,0); font-size:80%;">&darr;<span style="font-size:80%;  position: relative; left:-5px; top:-10px;">1</span></span>shall 
+fight in France, we <span style="font-weight: bold; color:rgb(200,0,0); font-size:80%;">&darr;<span style="font-size:80%;  position: relative; left:-5px; top:-10px;">2</span></span>shall 
+fight on the seas and oceans, 
+we <span style="font-weight: bold; color:rgb(200,0,0); font-size:80%;">&darr;<span style="font-size:80%;  position: relative; left:-5px; top:-10px;">3</span></span>shall 
+fight with growing confidence and growing strength in the air.
+</quote>
+</p>
+Suppose we move the cursor from the position marked as 1, right before the word shall, to position 
+2. The movement can be implemented as an application of <code>FindSuffix(T)</code> for
+many different strings <code>T</code>, including <code>T="s"</code>, <code>T="shall"</code>, <code>T="shall fight on the seas and oceans"</code> and more.
+<p/>
+The important thing to note is that we can define a lattice over the strings $T$ based on the following operations. 
+\[
+\begin{array}{ll}
+T_1 \leq T_2 & \mbox{iff } T_1 \mbox{ prefix } T_2 \\
+glb(T_1, T_2) =&   \mbox{longest common prefix of }T_1 \mbox{ and } T_2\\
+lub(T_1, T_2) = & \mbox{shortest string that has } T_1 \mbox{ and } T_2 \mbox{ as prefix}
+\end{array}
+\]
+The reader may notice that the structure above is not quite a lattice, because the $lub$ operation 
+is not well defined for all inputs. For example, $lub($"hello","world"$)$ is not well
+defined because there is no string that has both words as a prefix. 
+A common trick to address this problem for lattices is to define a special value $\top$ (pronounced "top")
+that is defined to be greater than all other values. In this case, $\top$ would
+be a special string with the property that $\forall T. T \mbox{ prefix }  \top$.
+Then it is clear that $lub($"hello","world"$)=\top$.
+<p/>
+With this lattice, we can see that the space of functions <code>FindSuffix(T)</code> is 
+boundary set representable. The set of functions consistent with moving the cursor from
+position 1 to position 2 is concisely represented by the range <code>["s", "shall fight on the seas and oceans...in the air."]</code>.
+<p/>
+Now, suppose we then observe the cursor moving from position 2 to position 3. This second movement
+is also consistent with a set of <code>FindSuffix</code> functions which can be represented with the range
+<code>["sh", "shall fight with growing confidence and growing strength in the air."]</code>.
+In this case, note that the set does not include "s", because the function <code>FindSuffix("s")</code>
+would have stopped right before "seas" instead of jumping all the way to position 3, so it is not
+consistent with the example.  
+<p/>
+Now we mentioned before that one important aspect of symbolic representations is the ability to 
+manipulate them efficiently. In general, for boundary set representable version spaces, 
+we can easily compute intersections as shown below:
+\[
+[a_l, a_h] \cap [b_l, b_h] = [lub(a_l, b_l), glb(a_h, b_h)]
+\]
+So in this case, if we want the set of programs that are consistent with both demonstrations, we can
+represent that set concisely as 
+<code>["sh", "shall fight "]</code>, since "sh" is the shortest string that has both "s" and "sh" as a 
+prefix, and "shall fight " is the longest common prefix of the two upper bounds. 
+
+
+<h2>Version Space Algebra</h2>
+
+Lattice-based version spaces are great if you have them, but can also be very restrictive. 
+The real power of the Version Space Algebra approach is the ability to symbolically represent
+complex compositions of simpler version spaces. 
+For example, two powerful operations for combining version spaces are Union and Join explained below.
+
+<p/>
+<b>Union.</b> The first form of composition is union $VS_{H_1, D} \cup VS_{H_2, D}$. As an example, consider
+the version space for <code>FindSuffix</code> presented earlier. There is an analogous 
+<code>FindPrefix(T)</code> that finds the position in the text <i>after</i> the next 
+occurrence of the string $T$. <code>FindPrefix</code> also has a lattice
+associated with it, except it is defined in terms of suffixes instead of prefixes.
+Now, we saw earlier that given two examples, one from the
+cursor from position 1 to 2, and one from 2 to 3, you could get the space 
+<code>FindSuffix(["sh", "shall fight "])</code>. Well, by a similar process, we can see that the 
+two examples are consistent with the space <code>FindPrefix(["we", ", we"])</code>. So the 
+union of these two version spaces can be represented simply as 
+<codeblock>
+FindSuffix(["sh", "shall fight "]) U FindPrefix(["we", ", we"])
+</codeblock>.
+If we added an additional example of jumping from the beginning of the text to position 1, 
+the added example would have a version space of the form
+<codeblock>
+FindSuffix(["shall f", "shall fight in France...air"]) U FindPrefix(["We", "We shall go on to the end. We"])
+</codeblock> 
+When we take the intersection of the two version spaces, we can take the intersection independently for 
+the two kinds of version spaces and we get
+<codeblock>
+FindSuffix(["shall f", "shall fight "]) U &empty;
+</codeblock> 
+We now have an empty set for FindPrefix, because there is no string
+that has both "we " and "We " as suffixes, so the glb of the two
+is $\top$. 
+
+<p/>
+<b>Join.</b> This is a form of relational join for version spaces defined
+as follows:
+<div class="quote">
+\[
+\begin{array}{c}
+VS_{H_1, D_1} \bowtie VS_{H_2, D_2} = \{ (h_1, h_2) | h_1 \in VS_{H_1, D_1}, h_2 \in VS_{H_2, D_2}, C((h_1, h_2), D) \}\\
+\mbox{where} \\
+D=\{(d_1^i, d_2^i)\} \mbox{ given } D_1 = \{d_1^i\}\mbox{ and }  D_2=\{d_2^i\}. 
+\end{array}
+\]
+</div>
+The function $C$ in the definition is meant to stand for a consistency 
+check that can be used to select which pairs in the cross product
+can actually be combined together. 
+<p/>
+In the case of PBD, Join can be used to describe sequences of operations
+together, especially when the demonstration allows us to separately provide
+evidence for the different actions in the sequence.
+
+Continuing with our running example, suppose that each of the jumps of the cursor, 
+from position 1 to position 2, to position 3 were treated as part of a 
+sequence of actions, rather than independent examples corresponding 
+to the same program. In that case, we could model this as a three way 
+join of actions, and maintain a version space for each of the joins. 
+
+<p/>
+
+Overall, the key idea in the version space algebra framework is that 
+we have symbolic representations of sets of progrmas. The representations may look
+like ASTs, but they are not ASTs representing programs. Instead, 
+they are ASTs representing the algebraic operations over sets of programs
+that led to the current set.
+
+
+
+<h2 id="FlashFill">Version Spaces meet E-Graphs in FlashFill</h2>
+
+The general framework of version space algebras is ultimately only as 
+powerful as the underlying representations used for the individual version spaces. 
+The work of Lau and her collaborators built a complex space of text manipulation functions
+from lattice based representations and compositions thereof, but ultimately they were not 
+very successful in providing sufficiently reliable automation. 
+Around 2010, though, Sumit Gulwani and his collaborators revisited some of these ideas
+armed with more powerful program representations that enabled a careful language
+design aimed at a narrower class of text manipulations and developed the FlashFill
+system which was eventually incorporated into Excel Office<cite>gulwani:2011:flashfill</cite>
+<cite>SinghG12</cite>. 
+
+<h3>A language for text manipulation.</h3>
+
+The first key ingredient in the flashfill system was the design of the language.
+The language is described in terms of two levels of abstraction. 
+The first level consists of Trace Expressions defined
+according to the grammar below:
+<div class="quote">
+\[
+\newcommand{\Loop}{\mbox{Loop}}
+\newcommand{\SubStr}{\mbox{SubStr}}
+\newcommand{\Pos}{\mbox{Pos}}
+\newcommand{\Cat}{\mbox{Concat}}
+\begin{array}{rcl}
+
+\mbox{Trace expression} & e :=& \Cat(f_1, \ldots, f_n) ~ | ~ f \\
+\mbox{Atomic expression} & f :=& \mbox{ConstStr}(s) ~~~ \mbox{String constant } s   \\
+                       ~ & ~ & |~ \mbox{SubStr}(v_i, p_1, p_2)~~~ \mbox{Produces a substring of } v_i \mbox{ that lies between the positions indicated by } p_1 \mbox{ and } p_2 \\
+                       ~ & ~ & |~ \mbox{Loop}(\lambda w. e) ~~~ \mbox{Looping construct where } e \mbox{ is the loop body and } w \mbox{ the loop index}.\\  
+\mbox{Position} & p := & CPos(k) ~~~\mbox{Constant position } k\\
+              ~ & ~    & Pos(r_1, r_2, c) ~~~\mbox{The } c^{th} \mbox{ position that has r1 as prefix and r2 as suffix}\\
+\mbox{Integer expr} & c := & k ~|~ k_1 * w + k ~~~~\mbox{where } w \mbox{ is a loop index} \\
+\mbox{Regular expr} & r := & T ~|~ TokenSeq(T_1, \ldots, T_k) | \epsilon              
+\end{array}
+\]
+</div>
+
+The langauge above is very expressive. For example, in our running
+example, suppose I want to collect all phrases that appear between a
+"shall" and a punctuation mark, including the word shall. We could write such an expression as 
+<div class="quote">
+\[
+\Loop(\lambda w. \SubStr(in, \Pos(``", ``shall", w), \Pos(``",PunctuationTok, w) ) )
+\]
+</div>
+The Loop construct iterates the expression until one of the terms becomes invalid. The expression itself
+finds the $w^{th}$ substring that starts with "shall" and ends right before a punctuation token.
+If we wanted to separate those with commas, we could use the program below instead:
+<div class="quote">
+\[
+\Loop(\lambda w. \Cat(\SubStr(in, \Pos(``", ``shall", w), \Pos(``",PunctuationTok, w) ), ``, " )  )
+\]
+</div>
+
+On top of these trace expressions, FlashFill allows some control structure. 
+
+<div class="quote">
+\[
+\newcommand{\Switch}{\mbox{Switch}}
+\newcommand{\Match}{\mbox{Match}}
+\begin{array}{rcl}
+
+\mbox{String program} & P :=& \Switch((b_1, e_1), \ldots, (b_n, e_n)) ~ | ~ f \\
+\mbox{Boolean condition} & b :=& d_1 \vee \ldots \vee d_n  \\
+\mbox{Conjunction} & d := & \pi_1 \wedge \ldots \wedge \pi_n\\
+\mbox{Predicate} & \pi := & \Match(v_i, r, k) ~|~ \neg \mbox{Match}(v_i, r, k) \\              
+\end{array}
+\]
+</div>
+The $\Switch$ expression choses the first expression $e_i$ whose 
+corresponding condition $b_i$ evaluates to true. The $\Match$
+predicate will be true if there are $k$ or more occurences of pattern
+$r$ in string $v_i$.   
+
+
+<p/>
+<slide>Lecture6:Slide33</slide>
+The key idea in the approach will be similar to the STUN approach we studied for 
+<a href="Lecture3.htm#stun_w_branches">bottom-up explicit search</a> in that
+the goal is first to compute functions that work for some of the inputs, 
+and then discover the conditional structure that combines programs that
+work for different subsets into a program that works for the whole input
+set. For the example in the figure, this involves independently discovering
+the programs that works for the cases with and without area code, and then
+discovering the condition that switches between the two. Note that
+the grammar is explicitly designed to support this approach and therefore
+only allows branches at the top level.
+
+<p/>
+Beyond the choice of language, however, the major innovation in flashfill is
+in the representation of the version spaces for the trace expressions. 
+By moving beyond lattice-based Boundary Set representations, flashfill 
+was able to efficiently support the language described above. 
+Before we dive into the details of the representation, though, 
+we introduce an idea which is important for that representation, the idea
+of graph-based representations of sets of programs.
+
+
+
+
+<h3>Graph representations for program spaces</h3>
+
+<p/>
+<slide>Lecture6:Slide35;
+Lecture6:Slide36;
+Lecture6:Slide37;
+Lecture6:Slide38;
+Lecture6:Slide39;
+Lecture6:Slide40;
+Lecture6:Slide41
+</slide>
+One of the key ingredients of FlashFill was the idea of using graphs to represent
+exponential spaces of programs. This idea traces its roots to 
+a set of representations called E-graphs, first introduced by 
+Downey, Sethi and Tarjan<cite>Downey:1980</cite> and popularized
+by Nelson through applications ranging from theorem proving 
+<cite>DetlefsNS05</cite> to superoptimization <cite>Joshi:2002</cite>. 
+The key idea in an e-graph is to represent an exponential set of possible programs
+with a compact graph, with different paths through the graph corresponding to different programs. 
+For example, the animation on the right shows the construction of an 
+E-graph that represents an exponential set of programs
+that can represent the expression $(x+2*y)+4*y$. 
+The representation starts with an AST for the original 
+expression, but is augmented by special edges that link nodes 
+to equivalent nodes, for example, the node $2*y$ is equivalent to the 
+node $y+y$. Every combination of choices from the different equivalence
+classes corresponds to a distinct expression in the set. 
+Just as with E-Graphs, the key data-structure in FlashFill is a 
+graph that concisely represents an exponential set of possible expressions.
+
+
+<h3>Representing Trace Expressions</h3>
+<slide>
+Lecture6:Slide45;
+Lecture6:Slide46;
+Lecture6:Slide47;
+Lecture6:Slide48;
+Lecture6:Slide49;
+Lecture6:Slide50
+</slide>
+To understand the core idea in the representation, consider the 
+example in the figure. The first key insight is that for
+every possible Trace Expression that could have generated that string,
+there is a partition of the string, where each sub-string in 
+the partition was generated by its own atomic expression. 
+For example, in one partition, each character was generated by 
+an atomic expression $\gamma_i$. But in a different partition, 
+maybe the entire string Rob was generated by an atomic
+expression $\gamma_{50}$. Just like in the e-graph example, 
+we can add edges to the graph corresponding to possible
+atomic expressions that could have generated different sub-strings. 
+And just like in the e-graph case, every edge we add leads to an 
+exponential growth in the programs we are representing, because in this
+case, every path through this graph corresponds to a different program
+that could have represented the string.
+
+<p/>
+
+This leaves us with two big challenges: how to efficiently represent
+the programs $\gamma_i$ corresponding to each edge, and how to 
+perform intersection between two such graphs efficiently.
+
+<h3>Learning atomic expressions</h3>
+<slide>
+Lecture6:Slide52
+</slide>
+The problem of learning atomic expressions is simpler than it looks thanks to the structure 
+of the language. The first thing to note is that there are only three possibilities for
+an atomic expression: It may be a constant, it may be a substring, or it may be a 
+loop expression. Constants are trivial to deal with, the more interesting ones 
+are substring expression. The key observation is that the different patterns in the $\SubStr$
+expression are independent of each other. For example, in the example from the figure, 
+any pattern that matches at position 1 can be combined with any pattern that matches at position 
+seven. The patterns themselves can actually be enumerated exhaustively given the limited
+scope of the pattern language. Identifying loops simply boils down to identifying 
+repeating patterns in the $\gamma_i$ that can be merged into a common expression using
+<a href="Lecture3.htm#unification">antiunification</a>.    
+
+
+<h3>Intersection</h3>
+Given two graphs representing a set of trace expressions, 
+it is relatively easy to compute a new graph that represents
+its intersection. 
+
+At a high-level, given two graphs $G_1 = (N_1, E_1)$
+$G_2 = (N_2, E_2)$ where $N_i$ are the sets of nodes
+and $E_i = \{(s^t_i, d^t_i, \gamma^t_i)\}$ are sets of edges
+from a source node $s^t_i$ to a destination node $d^t_i$
+labeled with a set of atomic expressions $\gamma^t_i$, 
+we can compute a graph for the intersection as follows:
+\[
+\begin{array} {rcl}
+G_1 \cap G_2 &=& (N, G) \mbox{ where} \\
+N &=& N_1 \times N_2\\
+G &=& \{ ((s^t_1, s^v_2) , (d^t_1, d^v_2), \gamma^t_1 \cup \gamma^v_2  ) 
+          | (s^t_1, d^t_1, \gamma^t_1) \in E_1 \wedge  (s^v_2, d^v_2, \gamma^v_2) \in E_2  \}
+\end{array}
+\]
+ In other words, the graph representing the intersection will
+ have a node for each pair of nodes from the two graphs, 
+ and for every pair of edges, there will be an edge representing their 
+ intersection.
+ <p/>
+ <slide>
+Lecture6:Slide53;
+Lecture6:Slide54;
+Lecture6:Slide55;
+Lecture6:Slide56
+</slide>
+The figure illustrates this intersection process. In 
+the figure we can see how select pairs of edges
+from the two original graphs get intersected. 
+For example, there is an edge in one graph 
+corresponding to the whole thing being a single string, 
+but it's intersection with another edge that also
+involves a constant string leads to an empty set. 
+<p/>
+On the other hand, the intersection between an edge
+that includes a substring from before the
+first word to after the first character intersects
+with a similar edge from another example and
+leads to an edge with the expression 
+<code>
+SubStr(in, Pos(“”, Word, 1), Pos(Char,””, 1))
+</code>. 
+The indices in the Pos expression are omitted
+in the figure for clarity.
+<p/>
+This basic approach has been extended to a 
+number of different domains. More recently, 
+Alex Polozov and Sumit Gulwani, have
+developed a framework called Prose (also called
+FlashMeta in the literature) that
+makes it possible to easily build these kind 
+of representations for other domains<cite>PolozovG15</cite>.
+
+
+
+
+
+
+
+<script>
+processDocument();
+</script>
+
+<div class="footnotes">
+
+<footnotes>
+
+</footnotes>
+
+</div>
+</div>
+
+</body>
+
+
+
+</html>

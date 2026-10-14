@@ -1,0 +1,350 @@
+<html>
+
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Lecture 4</title>
+
+<script type="text/javascript" async
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-MML-AM_CHTML">
+</script>
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}});
+</script>
+<script type="text/javascript" src="library.js"></script>
+<link href="style.css" rel="stylesheet" type="text/css">
+</head>
+
+<body>
+
+
+<div class="header">
+<h1 style="color: rgb(165, 42, 42);">Introduction to Program Synthesis</h1>
+&copy; Armando Solar-Lezama. 2018. All rights reserved.</div>
+
+<div id="navigator" class="sidenav">
+<a href="#about">Lecture 1</a> 
+<a href="#services">Lecture 2</a> 
+<a href="#clients">Lecture 3</a> 
+<a href="#contact">Lecture 4</a>
+</div>
+<script type="text/javascript">
+loadNavBar();
+</script>
+
+<div class="content">
+
+<h1>Lecture 4: Top Down and Type Directed Explicit Search <a href="https://code.playskript.com/view.html?id=ba82e44caf70fe675880a43e00006839a4074b119b225cae3b">(Slides)</a></h1>
+
+Bottom up search strategies start by constructing
+small program fragments and then putting together progressively 
+larger fragments until a complete program is constructed. 
+By contrast, Top-down search work by constructing programs with 
+holes, and progressively filling in the details of these holes.
+This strategy has proven to be particularly effective in constructing 
+functional programs. 
+
+
+Top-down explicit search is also the first context where we encounter
+another powerful idea in synthesis: the use of types in order to 
+prune the search space. Up to this point, we have been relying 
+on a grammar to define the space of legal programs and have assumed
+that any legal program with respect to the grammar is valid. 
+Types, however, provide us with an additional mechanism for ruling
+out invalid programs. Because type systems are generally designed to
+support local checking, types allow us to rule out invalid program 
+fragments quickly, so we never have to waste time trying different 
+programs. 
+
+The idea of leveraging the type system to aggressively prune
+the search space was proposed almost simultaneously by 
+the team of Osera and Zdancewic<cite>Osera:2015</cite> and
+by Feser, Chaudhuri and Dillig
+<cite>Feser:2015</cite> at PLDI 2015. In this lecture
+we focus on the approach of Feser et al., who 
+also expanded on the idea of type directed pruning
+with some additional pruning strategies based on deductive rules. 
+Before we can explore explore the results
+of these and other papers, we are going to introduce the simple functional
+language we will be using for the rest of the section.
+
+
+<h2>A simple language for list manipulation</h2>
+In order to explain this algorithm, we are going to 
+be using a simple functional language for manipulating
+lists.
+The language will be given by the following grammar:
+<div class="quote">
+$
+\begin{array}{rcl}
+expr &=& var \\
+     &|& \lambda x. expr\\
+     &|& \mbox{filter } expr ~ expr \\
+     &|& \mbox{map } expr ~ expr \\
+     &|& \mbox{foldl } expr ~ expr ~ expr \\
+     &|& boolExpr ~|~ arithExpr \\     
+\end{array}
+$
+</div>
+The symbol $var$ can represent any variable currently
+in scope. We assume the variable $x$ in the lambda 
+construct is just a fresh variable that does not appear
+anywhere else in the expression. We assume that
+the boolean and arithmetic expressions are standard
+boolean and arithmetic expressions as defined earlier
+in other languages.
+
+<p/>
+The expressions filter, map and foldl are defined below 
+using functional programming notation.
+<codeblock>
+map f lst = case lst of
+             []        -> []
+             head:rest -> f(head) : (map f rest) 
+
+filter p lst = case lst of 
+             []        -> []
+             head:rest -> if p(head) then head: (filter p rest)
+                          else (filter p rest)
+foldl binop start lst = case lst of 
+                       []  -> start
+                       head:rest -> (foldl binop (binop start head) rest)
+</codeblock>
+
+<slide>Lecture4:Slide4;
+Lecture4:Slide5;
+Lecture4:Slide6;
+Lecture4:Slide7;
+Lecture4:Slide8;
+Lecture4:Slide9
+</slide> 
+The definitions of map and filter are straightforward. Map
+applies a given function to all the elements in a given list, 
+and filter creates a new list that excludes any element
+for which a given predicate evaluates to false. 
+
+Fold is a little harder to describe; it essentially 
+applies the binary operation binop from left to right to the list, 
+as illustrated by the animations.
+
+<h2>Running example</h2>
+
+To illustrate the main ideas of the algorithm, consider the following example
+from Feser et al. The goal is to define a function <code>dropmins</code> that
+takes as input a list of lists of integers, where each one of the inner lists 
+corresponds to a list of grades. The output of <code>dropmins</code>
+must be a new list of lists where the lowest grade has been dropped. 
+For example, below is an input/output pair for this function:
+<codeblock>
+      Input                 Output
+   [ [71, 75, 83],         [ [75, 83], 
+     [90, 87, 95],           [90, 95],
+     [68, 77, 80] ]          [77, 80] ]
+</codeblock>
+A valid solution to this problem is shown below. 
+<codeblock>
+dropmins x = map (&lambda; y. filter (&lambda; z. foldl (&lambda; t. &lambda; w. t or (w < z)) False y) y) x
+</codeblock>
+The same function can be rendered more readable by using where notation.
+<codeblock>
+dropmins x = map dropmin x
+  where dropmin y = filter isNotMin y
+     where isNotMin z = foldl (&lambda; t. &lambda; w. t or (w < z)) False y
+</codeblock>
+So the rest of this section will explore how we can go about synthesizing this 
+function.
+
+<h2>Basic top down search</h2>
+
+<slide>Lecture4:Slide14;
+Lecture4:Slide15;
+Lecture4:Slide16
+</slide> 
+
+The most basic top-down synthesis algorithm involves simply 
+using the production rules from the grammar in order to 
+generate candidate programs as illustrated in the figure. 
+Every time we produce a concrete program, we can test it against
+the inputs and check whether it satisfies the constraints.  
+In the figure, we can see that after expanding only one level, 
+the only concrete program is the program <code>in</code>. 
+Evaluating this program, it is clear that it will not produce
+the desired output, so it can be clearly discarded.
+<p/>
+After this first expansion, all the other programs involve un-expanded
+expressions, so they cannot be evaluated. Even without evaluating them,
+however, we can already determine that many of them cannot possibly
+be expanded into a program that works. To understand why, we need
+to understand more about the type system for this simple language.
+
+<h2>A simple type system</h2>
+
+Not all programs in the language above are valid programs. This
+is because expressions in this language actually have <i>types</i>.
+We have seen languages with types before. For example, the list language
+from Lecture 2 distinguished between two types: integer and List. 
+Because we only had two types, it made sense to simply distinguish 
+between these in the grammar by separating integer expressions from 
+list expressions. This langauge is different, though, because 
+we have a potentially <i>infinite</i> set of types! 
+The reason it is infinite is that we want to support not just integers
+and lists of integers, but also arbitrarily nested lists of integers, 
+as well as functions.
+<div class="quote">
+$
+\begin{array}{rcl}
+\tau &=& Int ~ | ~ Bool\\
+     &|& [\tau] \\
+     &|& \tau \rightarrow \tau \\
+\end{array}
+$
+</div>
+<slide>Lecture4:Slide20
+</slide>
+The type of an expression is generally given by what is known as a <i>typing rule</i>. 
+A typing rule has the form 
+\[
+\frac{premises}{ Context \vdash expr : \tau}
+\]
+The way to read such a rule is that an expression $expr$ will have type $\tau$
+in a given $Context$ as long as all the premises are satisfied. The context
+generally just keeps track of the type of each variable. For example, 
+the rule below
+\[
+\frac{C, x:\tau_1 \vdash expr : \tau_2}{ C \vdash \lambda x. expr : \tau_1 \rightarrow \tau_2}
+\]
+says that an expression $\lambda x. expr$ will have type $\tau_1 \rightarrow \tau_2$ if
+we can show that the expression $expr$ has type $\tau_2$ in a context
+that is just like the context $C$, but that also has $x$ as having type $\tau_1$.
+The figure shows some additional typing rules. 
+<p/>
+Note, for example, that 
+according to those rules, fold takes as its first parameter a function
+that takes in a $\tau_{start}$ and then a $\tau_{lst}$ and produces
+a new value of type $\tau_{start}$. The second argument of fold is 
+of type $\tau_{start}$, and the third parameter is a list of values of type
+$\tau_{lst}$. The result will be a new value of type $\tau_{start}$. 
+Note, for example, that when <code>foldl</code> was used in the example earlier, 
+$\tau_{start}$ was actually equal to $Bool$ (because the second parameter was
+the boolean expression <code>False</code>), and $\tau_{lst}$ was actually
+equal to $Int$ because the third parameter was a list of integers. The 
+function  
+<code>(&lambda; t. &lambda; w. t or (w < z))</code>
+that was passed as a first parameter therefore had type
+$\tau_{start} \rightarrow \tau_{lst} \rightarrow \tau_{start} = 
+Bool \rightarrow Int \rightarrow Bool
+$
+
+<h2>Pruning the search with types</h2>
+<slide>
+Lecture4:Slide18;
+Lecture4:Slide21;
+Lecture4:Slide22;
+Lecture4:Slide23;
+Lecture4:Slide24
+</slide> 
+
+Now that we know something about the type system for our small language, 
+we can clearly see that many of the expressions from the first expansion 
+can never lead to a correct program and therefore need not be expanded
+any further. For example, we know that the input and output are 
+both of type 
+$[[Int]]$ because they are both a list of lists of integers.
+Now, from our typing rules, we know that the expression <code>&lambda; x. expr</code>
+will be of type $\tau_1 \rightarrow \tau_2$. Different expressions
+$expr$ may lead to different types $\tau_1$ and $\tau_2$, but a lambda
+must always be a function type. This means that no matter what expression 
+we use for $expr$,  $\lambda x. expr$ will never have the type we need
+for the output, and can therefore be safely discarded. 
+The same is true of the integer and boolean expressions. Regardless of how
+we instantiate them, they will always have type $Int$ and $Bool$ respectively, 
+so they can never have the desired $[[Int]]$ type, so they can be safely discarded
+as well. 
+<p/>
+An expression such as <code>map expr expr</code> can have the desired type, 
+but note from the typing rule that in order to have the desired type, 
+the first expression must correspond to a function with type 
+$\tau_1 \rightarrow [Int]$. This imposes some strong constraints on the 
+next level of the search, because we can again rule out any expression that
+does not have the desired type even before having concrete values for any 
+of its subexpressions.
+
+ 
+<h2>Further pruning with deductive rules</h2>
+<slide>
+Lecture4:Slide26;
+Lecture4:Slide30
+</slide>
+We can think of the typing rules as a particular kind of deductive rule 
+that allows us to propagate information about the inputs and outputs
+down to candidate sub-expressions. One of the key ideas behind the 
+work of Feser et al. is that we can define additional deduction rules
+for the different constructs in the language in order to prune the 
+search space even more efficiently. 
+
+<p/>
+As an example, consider again the sample input/output pair from above, 
+and suppose we are considering a candidate expression 
+<code>map in &lambda;x. expr</code>. From the definition of map, 
+we can derive input/output rules for the individual expression <code>expr</code>, 
+because we know that every element in the input list will be processed by
+this expression and its output will be added to the output list. 
+Therefore, when searching for the expression, we can directly check it 
+against its own set of local input/output pairs as illustrated in the figure.
+
+<p/>
+
+We could further hypothesize that the <code>&lambda;x. expr</code>, 
+is actually <code>&lambda;x. map x &lambda;y. expr</code>, but even 
+without knowing what <code>expr</code> is, we can see that this is not
+going to work, because the output of map must be of the same length as its input. 
+
+On the other hand, if we hypothesize <code>&lambda;x. expr</code> is 
+actually <code>&lambda;x. filter (&lambda;y. expr) x </code>, we can 
+again propagate the input/output example to the individual expression 
+based on our knowledge of how filter works.
+
+<p/>
+<slide>
+Lecture4:Slide31;
+Lecture4:Slide32;
+Lecture4:Slide33;
+Lecture4:Slide34;
+Lecture4:Slide35
+</slide>
+This intuition about how to propagate inputs, or how to tell when a candidate
+is not going to work can be formalized into deductive rules. The rules
+describe how given a candidate expression involving an unknown subexpression 
+$f$ and a set of input/output examples, one can either propagate the
+input/output examples down to the unknown sub-expression or 
+alternatively establish that no this is a dead-end for the search. 
+The figure shows to examples of rules corresponding to two of the cases 
+described above. One is the rule that explains how a set of examples 
+for an expression involving map can be propagated to the sub-expression. 
+Note that the rule as many conditions, for example, the rule requires that
+the examples are not contradictory, requiring different outputs for the same
+input. Another rule in the figure is the rule for the case when the
+inputs and outputs are of different length. In that case, the rule tells us 
+that this is a dead end, as no function can satisfy that constraint. 
+
+
+
+<script>
+processDocument();
+</script>
+
+<div class="footnotes">
+
+<footnotes>
+
+</footnotes>
+
+</div>
+</div>
+
+</body>
+
+
+
+</html>
