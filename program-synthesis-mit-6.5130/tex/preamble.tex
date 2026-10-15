@@ -1,0 +1,72 @@
+% Classic textbook style for the MIT 6.5130 lecture notes.
+\usepackage[paperwidth=7in,paperheight=10in,inner=0.9in,outer=0.9in,top=0.95in,bottom=1in]{geometry}
+\usepackage{newpxtext,newpxmath}
+\usepackage{fontspec}
+\setmonofont{Inconsolatazi4}[Extension=.otf, UprightFont=*-Regular, BoldFont=*-Bold, Scale=MatchLowercase, HyphenChar=None]
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{emptypage}
+\usepackage{adjustbox}
+\usepackage{xurl}
+
+% Code
+\definecolor{codebg}{gray}{0.955}
+\lstset{
+  basicstyle=\ttfamily\small,
+  columns=fullflexible, keepspaces=true,
+  backgroundcolor=\color{codebg},
+  frame=none, xleftmargin=1.2em, xrightmargin=1.2em,
+  framexleftmargin=0.6em, framexrightmargin=0.6em,
+  aboveskip=1.1ex, belowskip=1.1ex,
+  breaklines=true, tabsize=4, upquote=true,
+  extendedchars=true, escapeinside={(*@}{@*)},
+  literate={->}{{$\rightarrow$}}2 {<=}{{$\leq$}}1 {>=}{{$\geq$}}1
+           {λ}{{$\lambda$}}1 {→}{{$\rightarrow$}}1 {≤}{{$\leq$}}1 {≥}{{$\geq$}}1,
+}
+\newcommand{\code}[1]{\texttt{#1}}
+% MathJax built-ins used by the notes.
+\providecommand{\lt}{<}
+\providecommand{\gt}{>}
+\input{macros}
+\newenvironment{aside}{\begin{quote}\small}{\end{quote}}
+
+% Inline slide images: non-floating so sequences of frames can break across pages.
+\newlength{\slidewidth}
+\setlength{\slidewidth}{\linewidth}
+\newenvironment{slidefig}{\par\medskip\begin{center}}{\end{center}\medskip}
+
+% Display math that shrinks to the text width only when it would overflow.
+\newcommand{\fitdisplay}[1]{\par\smallskip\begin{center}\adjustbox{max width=\linewidth}{$\displaystyle #1$}\end{center}\smallskip}
+
+% Note for lectures whose page on the course site is not yet written.
+\newcommand{\sitenote}[1]{\begin{quote}\itshape #1\end{quote}}
+
+% Headings
+\titleformat{\chapter}[display]
+  {\normalfont\Large\scshape}{Lecture \thechapter}{1.2ex}{\normalfont\upshape\huge\bfseries\raggedright}
+\titlespacing*{\chapter}{0pt}{0pt}{3.5ex}
+\titleformat{\section}{\normalfont\large\bfseries}{\thesection}{0.8em}{}
+\titleformat{\subsection}{\normalfont\normalsize\bfseries}{\thesubsection}{0.8em}{}
+\titleformat{\part}[display]
+  {\normalfont\centering\Large\scshape}{Unit \thepart}{2ex}{\normalfont\upshape\Huge\bfseries}
+
+% Running heads
+\pagestyle{fancy}\fancyhf{}
+\fancyhead[LE]{\small\thepage\quad\scshape Introduction to Program Synthesis}
+\fancyhead[RO]{\small\scshape\nouppercase{\leftmark}\quad\upshape\thepage}
+\renewcommand{\chaptermark}[1]{\markboth{#1}{}}
+\renewcommand{\sectionmark}[1]{}
+\renewcommand{\headrulewidth}{0pt}
+\fancypagestyle{plain}{\fancyhf{}\fancyfoot[C]{\small\thepage}}
+
+\usepackage[hidelinks,bookmarksnumbered]{hyperref}
+\renewcommand{\bibname}{References}
+\setcounter{tocdepth}{1}
+\setlength{\emergencystretch}{3em}
+\raggedbottom

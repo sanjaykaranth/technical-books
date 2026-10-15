@@ -90,7 +90,7 @@ def fetch_and_save(path):
 def main():
     os.makedirs(OUT, exist_ok=True)
     pages = ["index.htm", "TOC.htm"] + [f"Lecture{i}.htm" for i in range(1, N_LECTURES + 1)]
-    support = ["lectures.txt", "library.js", "style.css",
+    support = ["lectures.txt", "library.js", "style.css", "biblio.bib",
                "icons/grow.png", "icons/shrink.png", "icons/next.png", "icons/bar.png"]
 
     refs = set()
